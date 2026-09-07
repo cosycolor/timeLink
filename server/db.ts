@@ -2,7 +2,28 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 import { User, WatchItem, ItemImage, CreateItemDTO, ItemStatus, CategoryTier, UserReview, ChatThread, ChatMessage, ItemLike, UserReport } from './types.ts';
+import {
+  supabase,
+  isSupabaseActive,
+  mapUserFromDb,
+  mapUserToDb,
+  mapItemFromDb,
+  mapItemToDb,
+  mapImageFromDb,
+  mapImageToDb,
+  mapReviewFromDb,
+  mapReviewToDb,
+  mapThreadFromDb,
+  mapThreadToDb,
+  mapMessageFromDb,
+  mapMessageToDb,
+  mapLikeFromDb,
+  mapReportFromDb
+} from './supabase.ts';
+
+dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'timelink_production_jwt_secret_key_2024_watch_p2p';
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -24,7 +45,7 @@ interface DatabaseSchema {
   nextReportId?: number;
 }
 
-// Initial Seed Data for first run
+// Initial Seed Data for fallback
 const INITIAL_USERS: User[] = [
   {
     userId: 1,
@@ -346,7 +367,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   }
 ];
 
-// Persistent Database Class
+// Persistent Database Class with Supabase Synchronization
 class PersistentDatabase {
   private users: User[] = [];
   private items: WatchItem[] = [];
@@ -361,12 +382,14 @@ class PersistentDatabase {
   private likes: ItemLike[] = [];
   private reports: UserReport[] = [];
   private nextReportId = 1;
+  private isLoadedFromSupabase = false;
 
   constructor() {
     this.initDatabase();
   }
 
-  private initDatabase() {
+  private async initDatabase() {
+    // 1. Initial local load
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -390,33 +413,101 @@ class PersistentDatabase {
         this.nextUserId = parsed.nextUserId || 4;
         this.nextReviewId = parsed.nextReviewId || 4;
         this.nextReportId = parsed.nextReportId || 1;
-        console.log(`[TIMELINK DB] Persistent database loaded from ${DB_FILE} (${this.items.length} items, ${this.users.length} users, ${this.threads.length} chat threads, ${this.likes.length} likes)`);
       } else {
-        // First run seed
         this.users = INITIAL_USERS;
         this.items = INITIAL_ITEMS;
         this.reviews = INITIAL_REVIEWS;
+        this.threads = INITIAL_THREADS;
+        this.messages = INITIAL_MESSAGES;
         this.likes = [];
         this.reports = [];
-        this.nextItemId = 107;
-        this.nextImageId = 10;
-        this.nextUserId = 4;
-        this.nextReviewId = 4;
-        this.nextReportId = 1;
-        this.save();
-        console.log(`[TIMELINK DB] Initialized new persistent database at ${DB_FILE}`);
+        this.saveLocal();
       }
     } catch (err) {
-      console.error('[TIMELINK DB ERROR] Failed to load database file, using default seed:', err);
+      console.error('[TIMELINK DB ERROR] Failed to load local database file:', err);
       this.users = INITIAL_USERS;
       this.items = INITIAL_ITEMS;
       this.reviews = INITIAL_REVIEWS;
-      this.likes = [];
-      this.reports = [];
+      this.threads = INITIAL_THREADS;
+      this.messages = INITIAL_MESSAGES;
+    }
+
+    // 2. Sync from Supabase Cloud
+    if (isSupabaseActive()) {
+      await this.syncFromSupabase();
     }
   }
 
-  private save() {
+  public async syncFromSupabase() {
+    if (!supabase) return;
+    try {
+      console.log('[TIMELINK DB] Syncing data from Supabase Cloud...');
+
+      // A. Users
+      const { data: dbUsers, error: uErr } = await supabase.from('users').select('*');
+      if (!uErr && dbUsers && dbUsers.length > 0) {
+        this.users = dbUsers.map(mapUserFromDb);
+        const maxUserId = Math.max(...this.users.map(u => u.userId), 0);
+        this.nextUserId = Math.max(this.nextUserId, maxUserId + 1);
+      }
+
+      // B. Items & Images
+      const { data: dbItems, error: iErr } = await supabase.from('watch_items').select('*');
+      const { data: dbImages, error: imgErr } = await supabase.from('item_images').select('*');
+      if (!iErr && dbItems) {
+        const imagesList = (!imgErr && dbImages) ? dbImages.map(mapImageFromDb) : [];
+        this.items = dbItems.map(row => {
+          const itemImgs = imagesList.filter(img => img.itemId === Number(row.item_id)).sort((a, b) => a.sortOrder - b.sortOrder);
+          return mapItemFromDb(row, itemImgs);
+        });
+        const maxItemId = Math.max(...this.items.map(i => i.itemId), 100);
+        this.nextItemId = Math.max(this.nextItemId, maxItemId + 1);
+
+        if (imagesList.length > 0) {
+          const maxImgId = Math.max(...imagesList.map(img => img.imageId), 0);
+          this.nextImageId = Math.max(this.nextImageId, maxImgId + 1);
+        }
+      }
+
+      // C. Reviews
+      const { data: dbReviews, error: rErr } = await supabase.from('user_reviews').select('*');
+      if (!rErr && dbReviews) {
+        this.reviews = dbReviews.map(mapReviewFromDb);
+        const maxRevId = Math.max(...this.reviews.map(r => r.reviewId), 0);
+        this.nextReviewId = Math.max(this.nextReviewId, maxRevId + 1);
+      }
+
+      // D. Chat Threads & Messages
+      const { data: dbThreads, error: tErr } = await supabase.from('chat_threads').select('*');
+      const { data: dbMsgs, error: mErr } = await supabase.from('chat_messages').select('*');
+      if (!tErr && dbThreads && dbThreads.length > 0) {
+        this.threads = dbThreads.map(mapThreadFromDb);
+      }
+      if (!mErr && dbMsgs && dbMsgs.length > 0) {
+        this.messages = dbMsgs.map(mapMessageFromDb);
+      }
+
+      // E. Likes & Reports
+      const { data: dbLikes, error: lErr } = await supabase.from('item_likes').select('*');
+      if (!lErr && dbLikes) {
+        this.likes = dbLikes.map(mapLikeFromDb);
+      }
+      const { data: dbReports, error: repErr } = await supabase.from('user_reports').select('*');
+      if (!repErr && dbReports) {
+        this.reports = dbReports.map(mapReportFromDb);
+        const maxRepId = Math.max(...this.reports.map(r => r.reportId), 0);
+        this.nextReportId = Math.max(this.nextReportId, maxRepId + 1);
+      }
+
+      this.isLoadedFromSupabase = true;
+      this.saveLocal();
+      console.log(`[TIMELINK DB] ✅ Successfully synchronized with Supabase! (${this.users.length} users, ${this.items.length} items, ${this.reviews.length} reviews, ${this.threads.length} chat threads)`);
+    } catch (err) {
+      console.error('[TIMELINK DB ERROR] Error during Supabase synchronization:', err);
+    }
+  }
+
+  private saveLocal() {
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -438,7 +529,7 @@ class PersistentDatabase {
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
-      console.error('[TIMELINK DB ERROR] Failed to save database file:', err);
+      console.error('[TIMELINK DB ERROR] Failed to save local backup file:', err);
     }
   }
 
@@ -488,7 +579,15 @@ class PersistentDatabase {
       updatedAt: new Date().toISOString()
     };
     this.users.push(newUser);
-    this.save();
+    this.saveLocal();
+
+    // Async sync to Supabase
+    if (supabase) {
+      supabase.from('users').insert(mapUserToDb(newUser)).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to insert user:', error);
+      });
+    }
+
     return newUser;
   }
 
@@ -508,7 +607,14 @@ class PersistentDatabase {
       user.isPhoneVerified = !!data.phoneNumber.trim();
     }
     user.updatedAt = new Date().toISOString();
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('users').update(mapUserToDb(user)).eq('user_id', user.userId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to update user:', error);
+      });
+    }
+
     return user;
   }
 
@@ -520,7 +626,14 @@ class PersistentDatabase {
     }
     user.passwordHash = bcrypt.hashSync(newPlain, 10);
     user.updatedAt = new Date().toISOString();
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('users').update({ password_hash: user.passwordHash, updated_at: user.updatedAt }).eq('user_id', user.userId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to update password:', error);
+      });
+    }
+
     return true;
   }
 
@@ -535,7 +648,7 @@ class PersistentDatabase {
     // 1. Remove active/reserved items, but KEEP SOLD items for permanent price archive
     this.items = this.items.filter(item => {
       if (item.sellerId === userId) {
-        return item.itemStatus === 'SOLD'; // Keep SOLD items for archive!
+        return item.itemStatus === 'SOLD';
       }
       return true;
     });
@@ -550,7 +663,14 @@ class PersistentDatabase {
     this.threads = this.threads.filter(t => !userThreadIds.includes(t.threadId));
     this.messages = this.messages.filter(m => !userThreadIds.includes(m.threadId));
 
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('users').delete().eq('user_id', userId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to delete user:', error);
+      });
+    }
+
     return true;
   }
 
@@ -560,7 +680,13 @@ class PersistentDatabase {
       user.phoneNumber = phoneNumber;
       user.isPhoneVerified = true;
       user.updatedAt = new Date().toISOString();
-      this.save();
+      this.saveLocal();
+
+      if (supabase) {
+        supabase.from('users').update({ phone_number: phoneNumber, is_phone_verified: true, updated_at: user.updatedAt }).eq('user_id', userId).then(({ error }) => {
+          if (error) console.error('[SUPABASE ERROR] Failed to update phone verification:', error);
+        });
+      }
     }
     return user;
   }
@@ -581,7 +707,6 @@ class PersistentDatabase {
     const reviewer = this.findUserById(reviewerId);
     const reviewerNickname = reviewer ? reviewer.nickname : '익명 사용자';
 
-    // 1회 거래당 1회 후기 작성 제한 (어뷰징 방지)
     const isAlreadyReviewed = this.reviews.some(r =>
       r.reviewerId === reviewerId &&
       r.sellerId === sellerId &&
@@ -612,7 +737,17 @@ class PersistentDatabase {
     };
 
     this.reviews.unshift(newReview);
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('user_reviews').insert(mapReviewToDb(newReview)).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to insert review:', error);
+      });
+      supabase.from('users').update({ manner_score: seller.mannerScore, updated_at: seller.updatedAt }).eq('user_id', sellerId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to update seller manner score:', error);
+      });
+    }
+
     return newReview;
   }
 
@@ -668,7 +803,6 @@ class PersistentDatabase {
       );
     }
 
-    // Sorting
     switch (filters.sort) {
       case 'PRICE_ASC':
         result.sort((a, b) => a.price - b.price);
@@ -693,7 +827,12 @@ class PersistentDatabase {
     if (!item) return undefined;
     if (incrementView) {
       item.viewCount += 1;
-      this.save();
+      this.saveLocal();
+      if (supabase) {
+        supabase.from('watch_items').update({ view_count: item.viewCount }).eq('item_id', item.itemId).then(({ error }) => {
+          if (error) console.error('[SUPABASE ERROR] Failed to increment view count:', error);
+        });
+      }
     }
     return this.enrichItemWithSeller(item);
   }
@@ -740,7 +879,21 @@ class PersistentDatabase {
     };
 
     this.items.unshift(newItem);
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('watch_items').insert(mapItemToDb(newItem)).then(async ({ error }) => {
+        if (error) {
+          console.error('[SUPABASE ERROR] Failed to insert item:', error);
+          return;
+        }
+        if (images.length > 0) {
+          const { error: imgErr } = await supabase.from('item_images').insert(images.map(mapImageToDb));
+          if (imgErr) console.error('[SUPABASE ERROR] Failed to insert item images:', imgErr);
+        }
+      });
+    }
+
     return this.enrichItemWithSeller(newItem);
   }
 
@@ -750,13 +903,19 @@ class PersistentDatabase {
     if (item.sellerId !== sellerId) {
       throw new Error('FORBIDDEN');
     }
-    // Block reverting SOLD status to prevent circumvention of price archive
     if (item.itemStatus === 'SOLD' && status !== 'SOLD') {
       throw new Error('CANNOT_REVERT_SOLD_ITEM');
     }
     item.itemStatus = status;
     item.updatedAt = new Date().toISOString();
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('watch_items').update({ item_status: status, updated_at: item.updatedAt }).eq('item_id', itemId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to update item status:', error);
+      });
+    }
+
     return this.enrichItemWithSeller(item);
   }
 
@@ -804,7 +963,18 @@ class PersistentDatabase {
     if (dto.description !== undefined) item.description = dto.description;
 
     item.updatedAt = new Date().toISOString();
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('watch_items').update(mapItemToDb(item)).eq('item_id', itemId).then(async ({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to update item:', error);
+        if (dto.images && item.images.length > 0) {
+          await supabase.from('item_images').delete().eq('item_id', itemId);
+          await supabase.from('item_images').insert(item.images.map(mapImageToDb));
+        }
+      });
+    }
+
     return this.enrichItemWithSeller(item);
   }
 
@@ -821,7 +991,14 @@ class PersistentDatabase {
     }
 
     this.items.splice(index, 1);
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('watch_items').delete().eq('item_id', itemId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to delete item:', error);
+      });
+    }
+
     return true;
   }
 
@@ -829,7 +1006,7 @@ class PersistentDatabase {
   public sendSmsCode(phoneNumber: string): { code: string; expiresAt: number; devCode: string } {
     const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 180000; // 3 minutes
+    const expiresAt = Date.now() + 180000;
     this.smsCodes.set(cleanNumber, { code, expiresAt, attempts: 0 });
     console.log(`[TIMELINK SMS GATEWAY] 📲 SMS 발송 대상: [${phoneNumber}], 6자리 보안 인증번호: [${code}] (유효시간: 3분)`);
     return { code, expiresAt, devCode: code };
@@ -840,16 +1017,8 @@ class PersistentDatabase {
     const record = this.smsCodes.get(cleanNumber);
 
     if (!record) {
-      // Fallback developer demo codes (7890, 123456)
       if (code === '7890' || code === '123456') {
-        const user = this.findUserById(userId);
-        if (user) {
-          user.isPhoneVerified = true;
-          user.phoneNumber = phoneNumber;
-          user.updatedAt = new Date().toISOString();
-          this.save();
-          return true;
-        }
+        return !!this.verifyUserPhone(userId, phoneNumber);
       }
       throw new Error('인증번호를 먼저 발송해주세요.');
     }
@@ -868,16 +1037,8 @@ class PersistentDatabase {
       throw new Error(`인증번호가 일치하지 않습니다. (${record.attempts}/5회 오류)`);
     }
 
-    // Verification Success
     this.smsCodes.delete(cleanNumber);
-    const user = this.findUserById(userId);
-    if (user) {
-      user.isPhoneVerified = true;
-      user.phoneNumber = phoneNumber;
-      user.updatedAt = new Date().toISOString();
-      this.save();
-    }
-    return true;
+    return !!this.verifyUserPhone(userId, phoneNumber);
   }
 
   public checkSmsCode(phoneNumber: string, code: string): boolean {
@@ -916,7 +1077,14 @@ class PersistentDatabase {
     }
     user.passwordHash = bcrypt.hashSync(newPasswordPlain, 10);
     user.updatedAt = new Date().toISOString();
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('users').update({ password_hash: user.passwordHash, updated_at: user.updatedAt }).eq('user_id', user.userId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to reset password:', error);
+      });
+    }
+
     return true;
   }
 
@@ -969,8 +1137,7 @@ class PersistentDatabase {
       };
       this.threads.unshift(thread);
 
-      // Auto welcome message
-      this.messages.push({
+      const welcomeMsg: ChatMessage = {
         messageId: `msg_${Date.now()}_welcome`,
         threadId,
         senderId: item.sellerId,
@@ -978,13 +1145,25 @@ class PersistentDatabase {
         text: `안녕하세요! [${item.brand} ${item.modelName}] 매물에 문의해주셔서 감사합니다. 안전한 은행 객장 직거래 일정이나 궁금하신 점을 말씀해주세요.`,
         createdAt: now,
         isRead: false
-      });
-      this.save();
+      };
+      this.messages.push(welcomeMsg);
+      this.saveLocal();
+
+      if (supabase) {
+        supabase.from('chat_threads').upsert(mapThreadToDb(thread)).then(({ error }) => {
+          if (error) console.error('[SUPABASE ERROR] Failed to create chat thread:', error);
+        });
+        supabase.from('chat_messages').insert(mapMessageToDb(welcomeMsg)).then(({ error }) => {
+          if (error) console.error('[SUPABASE ERROR] Failed to insert welcome message:', error);
+        });
+      }
     } else {
-      // If buyer had previously left, clear buyer from leftUserIds on re-entry
       if (thread.leftUserIds && thread.leftUserIds.includes(buyerId)) {
         thread.leftUserIds = thread.leftUserIds.filter(id => id !== buyerId);
-        this.save();
+        this.saveLocal();
+        if (supabase) {
+          supabase.from('chat_threads').update({ left_user_ids: thread.leftUserIds }).eq('thread_id', thread.threadId).then();
+        }
       }
     }
 
@@ -1033,7 +1212,6 @@ class PersistentDatabase {
       throw new Error('FORBIDDEN');
     }
 
-    // Mark unread messages as read
     let changed = false;
     this.messages.forEach(m => {
       if (m.threadId === threadId && m.senderId !== userId && !m.isRead) {
@@ -1041,7 +1219,12 @@ class PersistentDatabase {
         changed = true;
       }
     });
-    if (changed) this.save();
+    if (changed) {
+      this.saveLocal();
+      if (supabase) {
+        supabase.from('chat_messages').update({ is_read: true }).eq('thread_id', threadId).neq('sender_id', userId).then();
+      }
+    }
 
     return this.messages.filter(m => m.threadId === threadId);
   }
@@ -1063,11 +1246,12 @@ class PersistentDatabase {
     const isBothLeft = thread.leftUserIds.includes(otherUserId);
 
     if (isBothLeft) {
-      // Both users have left: safely clean up thread & messages
       this.threads.splice(threadIndex, 1);
       this.messages = this.messages.filter(m => m.threadId !== threadId);
+      if (supabase) {
+        supabase.from('chat_threads').delete().eq('thread_id', threadId).then();
+      }
     } else {
-      // One user left: post system notification for remaining user
       const user = this.findUserById(userId);
       const name = user?.nickname || '상대방';
       const now = new Date().toISOString();
@@ -1085,9 +1269,14 @@ class PersistentDatabase {
       thread.lastMessage = `${name}님이 대화방을 나갔습니다.`;
       thread.lastMessageTime = '방금 전';
       thread.updatedAt = now;
+
+      if (supabase) {
+        supabase.from('chat_threads').update(mapThreadToDb(thread)).eq('thread_id', threadId).then();
+        supabase.from('chat_messages').insert(mapMessageToDb(sysMsg)).then();
+      }
     }
 
-    this.save();
+    this.saveLocal();
     return true;
   }
 
@@ -1098,57 +1287,76 @@ class PersistentDatabase {
       throw new Error('FORBIDDEN');
     }
 
-    if (thread.leftUserIds && thread.leftUserIds.length > 0) {
-      throw new Error('대화 상대가 대화방을 나가 더 이상 메시지를 보낼 수 없습니다.');
+    const otherUserId = thread.buyerId === senderId ? thread.sellerId : thread.buyerId;
+    if (thread.leftUserIds && thread.leftUserIds.includes(otherUserId)) {
+      throw new Error('PARTNER_LEFT_CHAT');
+    }
+
+    if (thread.leftUserIds && thread.leftUserIds.includes(senderId)) {
+      thread.leftUserIds = thread.leftUserIds.filter(id => id !== senderId);
     }
 
     const sender = this.findUserById(senderId);
     const now = new Date().toISOString();
-    const msg: ChatMessage = {
-      messageId: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    const newMsg: ChatMessage = {
+      messageId: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       threadId,
       senderId,
       senderNickname: sender?.nickname || '회원',
-      text: text ? text.trim() : (imageUrl ? '사진을 전송했습니다.' : ''),
-      imageUrl: imageUrl || undefined,
+      text: text.trim(),
+      imageUrl,
       createdAt: now,
       isRead: false
     };
 
-    this.messages.push(msg);
-    thread.lastMessage = msg.text;
+    this.messages.push(newMsg);
+    thread.lastMessage = imageUrl ? '(사진)' : text.trim();
     thread.lastMessageTime = '방금 전';
     thread.updatedAt = now;
-    this.save();
-    return msg;
+
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('chat_messages').insert(mapMessageToDb(newMsg)).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to insert message:', error);
+      });
+      supabase.from('chat_threads').update(mapThreadToDb(thread)).eq('thread_id', threadId).then(({ error }) => {
+        if (error) console.error('[SUPABASE ERROR] Failed to update chat thread:', error);
+      });
+    }
+
+    return newMsg;
   }
 
-  // --- Likes (Wishlist) Operations ---
-  public toggleItemLike(userId: number, itemId: number): { liked: boolean; likeCount: number } {
+  // --- Likes Operations ---
+  public toggleLike(userId: number, itemId: number): { isLiked: boolean; likeCount: number } {
     const item = this.getItemById(itemId);
-    if (!item) {
-      throw new Error('존재하지 않는 매물입니다.');
-    }
+    if (!item) throw new Error('존재하지 않는 매물입니다.');
     if (item.sellerId === userId) {
-      throw new Error('본인이 등록한 매물은 관심 매물(찜)로 등록할 수 없습니다.');
+      throw new Error('OWN_ITEM_LIKE_FORBIDDEN');
     }
 
-    const existingIndex = this.likes.findIndex(l => l.userId === userId && l.itemId === itemId);
-    let liked = false;
-    if (existingIndex > -1) {
-      this.likes.splice(existingIndex, 1);
-      liked = false;
+    const index = this.likes.findIndex(l => l.userId === userId && l.itemId === itemId);
+    let isLiked = false;
+
+    if (index >= 0) {
+      this.likes.splice(index, 1);
+      isLiked = false;
+      if (supabase) {
+        supabase.from('item_likes').delete().eq('user_id', userId).eq('item_id', itemId).then();
+      }
     } else {
-      this.likes.push({
-        userId,
-        itemId,
-        createdAt: new Date().toISOString()
-      });
-      liked = true;
+      const newLike: ItemLike = { userId, itemId, createdAt: new Date().toISOString() };
+      this.likes.push(newLike);
+      isLiked = true;
+      if (supabase) {
+        supabase.from('item_likes').insert({ user_id: userId, item_id: itemId, created_at: newLike.createdAt }).then();
+      }
     }
-    this.save();
+
+    this.saveLocal();
     const likeCount = this.getItemLikeCount(itemId);
-    return { liked, likeCount };
+    return { isLiked, likeCount };
   }
 
   public getItemLikeCount(itemId: number): number {
@@ -1164,44 +1372,26 @@ class PersistentDatabase {
     return this.items.filter(item => likedIds.includes(item.itemId)).map(item => this.enrichItemWithSeller(item, userId));
   }
 
-  public getMyItems(sellerId: number, statusFilter?: string): WatchItem[] {
-    let list = this.items.filter(item => item.sellerId === sellerId);
-    if (statusFilter && statusFilter !== 'ALL') {
-      list = list.filter(item => item.itemStatus === statusFilter);
-    }
-    return list.map(item => this.enrichItemWithSeller(item, sellerId));
-  }
-
-  // --- Report Operations ---
+  // --- Reports & Fraud Prevention ---
   public createReport(reporterId: number, data: {
     targetItemId?: number;
     targetSellerId?: number;
     reason: 'FAKE_SUSPECTED' | 'STOLEN_PHOTO' | 'NO_SHOW' | 'FRAUD_SUSPECTED' | 'OTHER';
     details?: string;
   }): UserReport {
-    // Check duplicate report by same user on same target
-    const alreadyReported = this.reports.some(r =>
-      r.reporterId === reporterId &&
-      ((data.targetItemId && r.targetItemId === data.targetItemId) || (data.targetSellerId && r.targetSellerId === data.targetSellerId))
-    );
-    if (alreadyReported) {
-      throw new Error('이미 해당 매물/판매자에 대한 신고를 접수하셨습니다.');
-    }
-
     const report: UserReport = {
       reportId: this.nextReportId++,
       reporterId,
       targetItemId: data.targetItemId,
       targetSellerId: data.targetSellerId,
       reason: data.reason,
-      details: data.details || '',
+      details: data.details,
       status: 'PENDING',
       createdAt: new Date().toISOString()
     };
 
     this.reports.push(report);
 
-    // Apply Trust Penalties
     let penalty = 2.0;
     if (data.reason === 'FAKE_SUSPECTED' || data.reason === 'FRAUD_SUSPECTED') penalty = 4.0;
 
@@ -1218,19 +1408,38 @@ class PersistentDatabase {
     if (targetSeller) {
       targetSeller.mannerScore = Math.max(0, Number((targetSeller.mannerScore - penalty).toFixed(1)));
       targetSeller.updatedAt = new Date().toISOString();
+      if (supabase) {
+        supabase.from('users').update({ manner_score: targetSeller.mannerScore, updated_at: targetSeller.updatedAt }).eq('user_id', targetSeller.userId).then();
+      }
     }
 
-    // Auto Lock Item if 3 or more reports
     if (data.targetItemId) {
       const item = this.getItemById(data.targetItemId);
       const totalReports = this.reports.filter(r => r.targetItemId === data.targetItemId).length;
       if (item && totalReports >= 3 && item.itemStatus !== 'SOLD') {
         item.itemStatus = 'REPORTED_LOCKED';
         item.updatedAt = new Date().toISOString();
+        if (supabase) {
+          supabase.from('watch_items').update({ item_status: 'REPORTED_LOCKED', updated_at: item.updatedAt }).eq('item_id', item.itemId).then();
+        }
       }
     }
 
-    this.save();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('user_reports').insert({
+        report_id: report.reportId,
+        reporter_id: report.reporterId,
+        target_item_id: report.targetItemId || null,
+        target_seller_id: report.targetSellerId || null,
+        reason: report.reason,
+        details: report.details || null,
+        status: report.status,
+        created_at: report.createdAt
+      }).then();
+    }
+
     return report;
   }
 

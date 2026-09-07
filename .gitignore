@@ -11,6 +11,10 @@ build/
 uploads/
 data/
 *.local
+.env
+.env.*
+!.env.example
+
 
 # Logs
 npm-debug.log*

@@ -1,8 +1,12 @@
+import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+
+dotenv.config({ path: path.join(process.cwd(), '.env') });
+
 import { db } from './db.ts';
 import { sendRealSmsMessage } from './sms.ts';
 import { CategoryTier, CreateItemDTO, ItemStatus } from './types.ts';
