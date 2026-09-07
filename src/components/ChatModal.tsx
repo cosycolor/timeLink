@@ -6,7 +6,7 @@ import { api } from '../api.ts';
 interface ChatModalProps {
   item: WatchItem;
   initialThreadId?: string;
-  initialOtherUser?: { userId: number; nickname: string; mannerScore: number };
+  initialOtherUser?: { userId: number; nickname: string; mannerScore: number; isLeft?: boolean };
   currentUserId: number;
   onClose: () => void;
   onBackToList?: () => void;
@@ -25,7 +25,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   onItemStatusChanged
 }) => {
   const [threadId, setThreadId] = useState<string | null>(initialThreadId || null);
-  const [partnerUser, setPartnerUser] = useState<{ userId: number; nickname: string; mannerScore: number } | null>(initialOtherUser || null);
+  const [partnerUser, setPartnerUser] = useState<{ userId: number; nickname: string; mannerScore: number; isLeft?: boolean } | null>(initialOtherUser || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -37,6 +37,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const isSeller = currentUserId === itemState.sellerId;
 
@@ -49,8 +50,15 @@ export const ChatModal: React.FC<ChatModalProps> = ({
     } catch {}
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
   };
 
   // Initialize or fetch Thread
@@ -84,6 +92,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           const msgList = await api.getChatMessages(activeId);
           setMessages(msgList);
           checkReviewStatus(item.sellerId);
+          setTimeout(() => scrollToBottom('auto'), 50);
         }
       } catch (err: any) {
         if (isMounted) {
@@ -101,23 +110,37 @@ export const ChatModal: React.FC<ChatModalProps> = ({
     };
   }, [item.itemId, initialThreadId]);
 
-  // Polling for incoming messages
+  // Polling for incoming messages without unnecessary scrollbar yanking
   useEffect(() => {
     if (!threadId) return;
 
     const interval = setInterval(async () => {
       try {
         const msgList = await api.getChatMessages(threadId);
-        setMessages(msgList);
+        setMessages(prev => {
+          const isDifferent = msgList.length !== prev.length ||
+            (msgList.length > 0 && prev[prev.length - 1]?.messageId !== msgList[msgList.length - 1]?.messageId);
+
+          if (!isDifferent) {
+            return prev; // keep identical reference to avoid unnecessary re-renders
+          }
+
+          // Check if user is scrolled near bottom before auto-scrolling
+          if (chatContainerRef.current) {
+            const container = chatContainerRef.current;
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+            if (isNearBottom) {
+              setTimeout(() => scrollToBottom('smooth'), 50);
+            }
+          }
+
+          return msgList;
+        });
       } catch {}
     }, 3000);
 
     return () => clearInterval(interval);
   }, [threadId]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   // Send Text / Image Message
   const handleSendMessage = async (textToSend?: string, imageUrlToSend?: string) => {
@@ -130,26 +153,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
     try {
       const newMsg = await api.sendChatMessage(threadId, text, imageUrlToSend);
       setMessages(prev => [...prev, newMsg]);
-
-      // If user is buyer talking to sample seller, simulate polite response
-      if (!isSeller && !imageUrlToSend) {
-        setTimeout(async () => {
-          try {
-            let replyText = '네, 문의 주셔서 감사합니다! 안전한 은행 객장 대면 직거래 가능합니다.';
-            if (text.includes('네고') || text.includes('가격') || text.includes('할인')) {
-              replyText = '현장에서 쿨거래 진행해주시면 차비 정도는 기분 좋게 네고해 드리겠습니다 ^^';
-            } else if (text.includes('장소') || text.includes('위치') || text.includes('시간')) {
-              replyText = `${itemState.preferredLocation || '서울 인근 은행 객장'}에서 거래 희망하며, 내일 오후 시간대 어떠신가요?`;
-            } else if (text.includes('보증서') || text.includes('상태') || text.includes('사진')) {
-              replyText = '보증서, 영수증, 여분코 풀구성 보관 중이며 현장에서 시계 점검 및 시리얼 각인 대조 가능합니다.';
-            }
-
-            await api.sendChatMessage(threadId, replyText);
-            const refreshed = await api.getChatMessages(threadId);
-            setMessages(refreshed);
-          } catch {}
-        }, 1200);
-      }
+      setTimeout(() => scrollToBottom('smooth'), 50);
     } catch (err: any) {
       setError(err.message || '메시지 전송에 실패했습니다.');
     } finally {
@@ -302,12 +306,26 @@ export const ChatModal: React.FC<ChatModalProps> = ({
                 <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff' }}>
                   {partnerUser?.nickname || (isSeller ? '구매자' : (itemState.seller?.nickname || '판매자'))}
                 </span>
-                <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 600 }}>
-                  매너온도 {(partnerUser?.mannerScore ?? itemState.seller?.mannerScore ?? 36.5).toFixed(1)}℃
-                </span>
+                {partnerUser?.isLeft ? (
+                  <span style={{
+                    fontSize: '0.68rem',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    color: '#fca5a5',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 700
+                  }}>
+                    대화 상대 나감
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 600 }}>
+                    매너온도 {(partnerUser?.mannerScore ?? itemState.seller?.mannerScore ?? 36.5).toFixed(1)}℃
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                1:1 안심 직거래 대화방
+                {partnerUser?.isLeft ? '상대방이 대화방을 나갔습니다' : '1:1 안심 직거래 대화방'}
               </div>
             </div>
           </div>
@@ -335,7 +353,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
               <span>방 나가기</span>
             </button>
 
-            {onOpenReview && !isSeller && (
+            {onOpenReview && !isSeller && !partnerUser?.isLeft && (
               hasReviewed ? (
                 <span
                   style={{
@@ -423,7 +441,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           </div>
 
           {/* Seller Direct Action: Mark as SOLD */}
-          {isSeller && itemState.itemStatus !== 'SOLD' && (
+          {isSeller && itemState.itemStatus !== 'SOLD' && !partnerUser?.isLeft && (
             <button
               onClick={handleMarkAsSold}
               style={{
@@ -464,15 +482,18 @@ export const ChatModal: React.FC<ChatModalProps> = ({
         </div>
 
         {/* Messages List Area */}
-        <div style={{
-          flex: 1,
-          padding: '16px',
-          overflowY: 'auto',
-          backgroundColor: '#f8fafc',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
+        <div
+          ref={chatContainerRef}
+          style={{
+            flex: 1,
+            padding: '16px',
+            overflowY: 'auto',
+            backgroundColor: '#f8fafc',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}
+        >
           {isLoading ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: '0.85rem' }}>
               대화 내역을 불러오는 중...
@@ -483,6 +504,28 @@ export const ChatModal: React.FC<ChatModalProps> = ({
             </div>
           ) : (
             messages.map((msg) => {
+              if (msg.isSystem) {
+                return (
+                  <div key={msg.messageId} style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
+                    <div style={{
+                      fontSize: '0.76rem',
+                      backgroundColor: '#f1f5f9',
+                      border: '1px solid #e2e8f0',
+                      color: '#64748b',
+                      padding: '5px 14px',
+                      borderRadius: '16px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <AlertCircle size={13} color="#94a3b8" />
+                      <span>{msg.text}</span>
+                    </div>
+                  </div>
+                );
+              }
+
               const isMe = msg.senderId === currentUserId;
               return (
                 <div
@@ -538,103 +581,125 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Suggestion Chips */}
-        <div style={{
-          padding: '8px 14px',
-          background: '#ffffff',
-          borderTop: '1px solid #e2e8f0',
-          display: 'flex',
-          gap: '6px',
-          overflowX: 'auto',
-          scrollbarWidth: 'none'
-        }}>
-          {quickActions.map((action, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSendMessage(action)}
-              disabled={isSending || isLoading}
-              style={{
-                background: '#f1f5f9',
-                border: '1px solid #e2e8f0',
-                color: '#334155',
-                fontSize: '0.74rem',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                whiteSpace: 'nowrap',
-                cursor: 'pointer'
-              }}
-            >
-              {action}
-            </button>
-          ))}
-        </div>
-
-        {/* Message Input Bar */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendMessage();
-          }}
-          style={{
-            padding: '12px 16px',
-            background: '#ffffff',
+        {/* If partner has left: Show disabled notice. Otherwise: Show Input & Chips */}
+        {partnerUser?.isLeft ? (
+          <div style={{
+            padding: '16px 20px',
+            backgroundColor: '#f1f5f9',
             borderTop: '1px solid #e2e8f0',
+            textAlign: 'center',
+            color: '#64748b',
+            fontSize: '0.84rem',
+            fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          {/* Hidden File Input for Photos */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleImageFileChange}
-          />
-
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isSending || isLoading || isUploadingImage}
-            style={{
-              background: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              width: '40px',
-              height: '40px',
+            justifyContent: 'center',
+            gap: '6px'
+          }}>
+            <AlertCircle size={16} color="#94a3b8" />
+            <span>대화 상대가 대화방을 나갔으므로 더 이상 메시지를 보낼 수 없습니다.</span>
+          </div>
+        ) : (
+          <>
+            {/* Quick Suggestion Chips */}
+            <div style={{
+              padding: '8px 14px',
+              background: '#ffffff',
+              borderTop: '1px solid #e2e8f0',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: isUploadingImage ? 'not-allowed' : 'pointer',
-              color: '#475569',
-              flexShrink: 0
-            }}
-            title="실물 사진 첨부"
-          >
-            <Image size={18} />
-          </button>
+              gap: '6px',
+              overflowX: 'auto',
+              scrollbarWidth: 'none'
+            }}>
+              {quickActions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(action)}
+                  disabled={isSending || isLoading}
+                  style={{
+                    background: '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    color: '#334155',
+                    fontSize: '0.74rem',
+                    padding: '4px 10px',
+                    borderRadius: '16px',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
 
-          <input
-            type="text"
-            placeholder={isUploadingImage ? '사진 업로드 중...' : '메시지를 입력하세요...'}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            disabled={isSending || isLoading || isUploadingImage}
-            className="form-input"
-            style={{ fontSize: '0.88rem', height: '40px' }}
-          />
+            {/* Message Input Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              style={{
+                padding: '12px 16px',
+                background: '#ffffff',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {/* Hidden File Input for Photos */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleImageFileChange}
+              />
 
-          <button
-            type="submit"
-            disabled={isSending || isLoading || !inputText.trim() || isUploadingImage}
-            className="btn-primary"
-            style={{ height: '40px', padding: '0 16px', whiteSpace: 'nowrap', opacity: !inputText.trim() ? 0.6 : 1, flexShrink: 0 }}
-          >
-            <Send size={15} />
-            <span>전송</span>
-          </button>
-        </form>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSending || isLoading || isUploadingImage}
+                style={{
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: isUploadingImage ? 'not-allowed' : 'pointer',
+                  color: '#475569',
+                  flexShrink: 0
+                }}
+                title="실물 사진 첨부"
+              >
+                <Image size={18} />
+              </button>
+
+              <input
+                type="text"
+                placeholder={isUploadingImage ? '사진 업로드 중...' : '메시지를 입력하세요...'}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                disabled={isSending || isLoading || isUploadingImage}
+                className="form-input"
+                style={{ fontSize: '0.88rem', height: '40px' }}
+              />
+
+              <button
+                type="submit"
+                disabled={isSending || isLoading || !inputText.trim() || isUploadingImage}
+                className="btn-primary"
+                style={{ height: '40px', padding: '0 16px', whiteSpace: 'nowrap', opacity: !inputText.trim() ? 0.6 : 1, flexShrink: 0 }}
+              >
+                <Send size={15} />
+                <span>전송</span>
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

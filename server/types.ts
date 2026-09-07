@@ -113,6 +113,7 @@ export interface ChatMessage {
   imageUrl?: string;
   createdAt: string;
   isRead: boolean;
+  isSystem?: boolean;
 }
 
 export interface ChatThread {
@@ -123,6 +124,8 @@ export interface ChatThread {
   lastMessage: string;
   lastMessageTime: string;
   updatedAt: string;
+  leftUserIds?: number[];
+  isPartnerLeft?: boolean;
 }
 
 export interface ItemLike {

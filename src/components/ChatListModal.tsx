@@ -9,10 +9,12 @@ export interface ChatThread {
     userId: number;
     nickname: string;
     mannerScore: number;
+    isLeft?: boolean;
   };
   lastMessage: string;
   lastMessageTime: string;
   unreadCount: number;
+  isPartnerLeft?: boolean;
 }
 
 interface ChatListModalProps {
@@ -119,9 +121,24 @@ export const ChatListModal: React.FC<ChatListModalProps> = ({
                   {/* Message & Partner Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
-                        {thread.otherUser.nickname}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: thread.otherUser.isLeft || thread.isPartnerLeft ? '#94a3b8' : '#0f172a' }}>
+                          {thread.otherUser.nickname}
+                        </span>
+                        {(thread.otherUser.isLeft || thread.isPartnerLeft) && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            backgroundColor: '#f1f5f9',
+                            color: '#64748b',
+                            border: '1px solid #e2e8f0',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            fontWeight: 600
+                          }}>
+                            대화 상대 나감
+                          </span>
+                        )}
+                      </div>
                       <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                         {thread.lastMessageTime}
                       </span>

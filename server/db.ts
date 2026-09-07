@@ -922,10 +922,11 @@ class PersistentDatabase {
 
   // --- 1:1 Direct Chat Methods ---
   public getChatThreadsForUser(userId: number) {
-    const userThreads = this.threads.filter(t => t.buyerId === userId || t.sellerId === userId);
+    const userThreads = this.threads.filter(t => (t.buyerId === userId || t.sellerId === userId) && (!t.leftUserIds || !t.leftUserIds.includes(userId)));
     return userThreads.map(t => {
       const otherUserId = t.buyerId === userId ? t.sellerId : t.buyerId;
       const otherUser = this.findUserById(otherUserId);
+      const isPartnerLeft = (t.leftUserIds || []).includes(otherUserId);
       const item = this.getItemById(t.itemId);
       const unreadCount = this.messages.filter(m => m.threadId === t.threadId && m.senderId !== userId && !m.isRead).length;
       return {
@@ -933,13 +934,15 @@ class PersistentDatabase {
         item: item || { itemId: t.itemId, brand: 'TIMELINK', modelName: '시계 매물', price: 0, images: [] },
         otherUser: {
           userId: otherUserId,
-          nickname: otherUser?.nickname || '회원',
-          mannerScore: otherUser?.mannerScore || 36.5
+          nickname: otherUser?.nickname || (isPartnerLeft ? '알 수 없음' : '회원'),
+          mannerScore: otherUser?.mannerScore || 36.5,
+          isLeft: isPartnerLeft
         },
         lastMessage: t.lastMessage,
         lastMessageTime: t.lastMessageTime,
         unreadCount,
-        updatedAt: t.updatedAt
+        updatedAt: t.updatedAt,
+        isPartnerLeft
       };
     }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
@@ -961,7 +964,8 @@ class PersistentDatabase {
         sellerId: item.sellerId,
         lastMessage: '직거래 대화가 시작되었습니다.',
         lastMessageTime: '방금 전',
-        updatedAt: now
+        updatedAt: now,
+        leftUserIds: []
       };
       this.threads.unshift(thread);
 
@@ -976,16 +980,24 @@ class PersistentDatabase {
         isRead: false
       });
       this.save();
+    } else {
+      // If buyer had previously left, clear buyer from leftUserIds on re-entry
+      if (thread.leftUserIds && thread.leftUserIds.includes(buyerId)) {
+        thread.leftUserIds = thread.leftUserIds.filter(id => id !== buyerId);
+        this.save();
+      }
     }
 
+    const isPartnerLeft = (thread.leftUserIds || []).includes(item.sellerId);
     const seller = this.findUserById(item.sellerId);
     return {
       thread,
       item,
       otherUser: {
         userId: item.sellerId,
-        nickname: seller?.nickname || '판매자',
-        mannerScore: seller?.mannerScore || 36.5
+        nickname: seller?.nickname || (isPartnerLeft ? '알 수 없음' : '판매자'),
+        mannerScore: seller?.mannerScore || 36.5,
+        isLeft: isPartnerLeft
       }
     };
   }
@@ -1000,13 +1012,16 @@ class PersistentDatabase {
     if (!item) throw new Error('존재하지 않는 매물입니다.');
     const otherUserId = thread.buyerId === userId ? thread.sellerId : thread.buyerId;
     const otherUser = this.findUserById(otherUserId);
+    const isPartnerLeft = (thread.leftUserIds || []).includes(otherUserId);
+
     return {
       thread,
       item,
       otherUser: {
         userId: otherUserId,
-        nickname: otherUser?.nickname || (thread.buyerId === otherUserId ? '구매자' : '판매자'),
-        mannerScore: otherUser?.mannerScore || 36.5
+        nickname: otherUser?.nickname || (isPartnerLeft ? '알 수 없음' : (thread.buyerId === otherUserId ? '구매자' : '판매자')),
+        mannerScore: otherUser?.mannerScore || 36.5,
+        isLeft: isPartnerLeft
       }
     };
   }
@@ -1039,8 +1054,39 @@ class PersistentDatabase {
       throw new Error('FORBIDDEN');
     }
 
-    this.threads.splice(threadIndex, 1);
-    this.messages = this.messages.filter(m => m.threadId !== threadId);
+    if (!thread.leftUserIds) thread.leftUserIds = [];
+    if (!thread.leftUserIds.includes(userId)) {
+      thread.leftUserIds.push(userId);
+    }
+
+    const otherUserId = thread.buyerId === userId ? thread.sellerId : thread.buyerId;
+    const isBothLeft = thread.leftUserIds.includes(otherUserId);
+
+    if (isBothLeft) {
+      // Both users have left: safely clean up thread & messages
+      this.threads.splice(threadIndex, 1);
+      this.messages = this.messages.filter(m => m.threadId !== threadId);
+    } else {
+      // One user left: post system notification for remaining user
+      const user = this.findUserById(userId);
+      const name = user?.nickname || '상대방';
+      const now = new Date().toISOString();
+      const sysMsg: ChatMessage = {
+        messageId: `msg_${Date.now()}_sys_leave`,
+        threadId,
+        senderId: 0,
+        senderNickname: '알림',
+        text: `${name}님이 대화방을 나갔습니다.`,
+        createdAt: now,
+        isRead: false,
+        isSystem: true
+      };
+      this.messages.push(sysMsg);
+      thread.lastMessage = `${name}님이 대화방을 나갔습니다.`;
+      thread.lastMessageTime = '방금 전';
+      thread.updatedAt = now;
+    }
+
     this.save();
     return true;
   }
@@ -1050,6 +1096,10 @@ class PersistentDatabase {
     if (!thread) throw new Error('채팅방을 찾을 수 없습니다.');
     if (thread.buyerId !== senderId && thread.sellerId !== senderId) {
       throw new Error('FORBIDDEN');
+    }
+
+    if (thread.leftUserIds && thread.leftUserIds.length > 0) {
+      throw new Error('대화 상대가 대화방을 나가 더 이상 메시지를 보낼 수 없습니다.');
     }
 
     const sender = this.findUserById(senderId);
