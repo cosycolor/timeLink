@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Eye, Crown, Watch } from 'lucide-react';
+import { MapPin, Eye, Watch } from 'lucide-react';
 import { WatchItem } from '../types.ts';
 
 interface ItemCardProps {
@@ -32,28 +32,6 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
     if (diffHours < 24) return `${diffHours}시간 전`;
     const diffDays = Math.floor(diffHours / 24);
     return `${diffDays}일 전`;
-  };
-
-  const renderTierBadge = () => {
-    if (item.categoryTier === 'HIGH_END') {
-      return (
-        <span className="badge-high-end">
-          <Crown size={11} /> 1,000만원 이상
-        </span>
-      );
-    }
-    if (item.categoryTier === 'MID') {
-      return (
-        <span className="badge-mid">
-          <Watch size={11} /> 300만~1,000만
-        </span>
-      );
-    }
-    return (
-      <span className="badge-entry">
-        300만원 미만
-      </span>
-    );
   };
 
   return (
@@ -115,18 +93,6 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
             <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{item.brand} {item.modelName}</span>
           </div>
         )}
-
-        {/* Top Badges (Tier only, verification badge removed) */}
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          left: '10px',
-          display: 'flex',
-          gap: '4px',
-          zIndex: 2
-        }}>
-          {renderTierBadge()}
-        </div>
 
         {/* Reserved Status Tag */}
         {isReserved && !isSold && (
