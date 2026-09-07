@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
-import { MapPin, Eye, Watch } from 'lucide-react';
+import { MapPin, Eye, Watch, Heart } from 'lucide-react';
 import { WatchItem } from '../types.ts';
 
 interface ItemCardProps {
   item: WatchItem;
   onClick: () => void;
+  isLiked?: boolean;
+  onToggleLike?: (e: React.MouseEvent) => void;
+  isOwner?: boolean;
+  currentUserId?: number;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
+export const ItemCard: React.FC<ItemCardProps> = ({
+  item,
+  onClick,
+  isLiked = false,
+  onToggleLike,
+  isOwner = false,
+  currentUserId
+}) => {
   const [imgError, setImgError] = useState(false);
   const isSold = item.itemStatus === 'SOLD';
   const isReserved = item.itemStatus === 'RESERVED';
+  const isMyItem = isOwner || (currentUserId !== undefined && item.sellerId === currentUserId);
 
   const repImage = item.images.find(img => img.isRepresentative) || item.images[0];
 
@@ -142,6 +154,37 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
             </span>
           </div>
         )}
+        {/* Quick Wishlist Like Button on Card (Hidden for seller's own listings) */}
+        {onToggleLike && !isSold && !isMyItem && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleLike(e);
+            }}
+            style={{
+              position: 'absolute',
+              bottom: '8px',
+              right: '8px',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: isLiked ? '#ffffff' : 'rgba(15, 23, 42, 0.45)',
+              border: isLiked ? '1px solid #fecaca' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 4,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+              backdropFilter: 'blur(4px)',
+              transition: 'transform 0.15s ease'
+            }}
+            title={isLiked ? '찜 취소' : '찜하기'}
+          >
+            <Heart size={16} fill={isLiked ? '#ef4444' : 'none'} color={isLiked ? '#ef4444' : '#ffffff'} strokeWidth={2.2} />
+          </button>
+        )}
       </div>
 
       {/* Card Content Area */}
@@ -266,8 +309,14 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
             </div>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', color: '#94a3b8', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+            {(item.likeCount ?? 0) > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', color: isLiked ? '#ef4444' : '#94a3b8' }}>
+                <Heart size={12} fill={isLiked ? '#ef4444' : '#94a3b8'} color={isLiked ? '#ef4444' : '#94a3b8'} />
+                <span>{item.likeCount}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', color: '#94a3b8' }}>
               <Eye size={12} />
               <span>조회 {item.viewCount}</span>
             </div>

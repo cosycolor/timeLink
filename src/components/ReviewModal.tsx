@@ -84,7 +84,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const currentTags = rating === 'BAD' ? NEGATIVE_TAGS : POSITIVE_TAGS;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}

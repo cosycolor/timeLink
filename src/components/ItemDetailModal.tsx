@@ -16,7 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  ThumbsUp
+  ThumbsUp,
+  Heart,
+  Flag,
+  Edit3
 } from 'lucide-react';
 import { WatchItem, ItemStatus } from '../types.ts';
 
@@ -25,9 +28,15 @@ interface ItemDetailModalProps {
   onClose: () => void;
   onStatusChange: (itemId: number, newStatus: ItemStatus) => Promise<void>;
   onDelete: (itemId: number) => Promise<void>;
+  onEditItem?: (item: WatchItem) => void;
   onOpenSellerProfile?: (sellerId: number) => void;
   onOpenChat?: (item: WatchItem) => void;
   onOpenReview?: (sellerId: number, sellerNickname: string, itemSummary?: string) => void;
+  onOpenReport?: (item: WatchItem) => void;
+  onBack?: () => void;
+  backLabel?: string;
+  isLiked?: boolean;
+  onToggleLike?: () => void;
   currentUserId: number;
 }
 
@@ -36,9 +45,15 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onClose,
   onStatusChange,
   onDelete,
+  onEditItem,
   onOpenSellerProfile,
   onOpenChat,
   onOpenReview,
+  onOpenReport,
+  onBack,
+  backLabel,
+  isLiked = false,
+  onToggleLike,
   currentUserId
 }) => {
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
@@ -76,6 +91,18 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   const handleStatusUpdate = async (status: ItemStatus) => {
+    if (item.itemStatus === 'SOLD') {
+      setActionError('거래완료(SOLD) 처리된 매물은 실거래 시세 아카이브 정책에 따라 상태를 변경할 수 없습니다.');
+      return;
+    }
+    if (status === 'SOLD') {
+      const confirmed = window.confirm(
+        '⚠️ [실거래 시세 아카이브 영구 보존 안내]\n\n' +
+        '매물을 [거래완료(SOLD)]로 변경하면 실거래 시세 데이터의 투명성을 위해 이후 [판매중/예약중]으로 상태를 되돌리거나 삭제할 수 없습니다.\n\n' +
+        '정말로 거래완료 처리하시겠습니까?'
+      );
+      if (!confirmed) return;
+    }
     setActionError(null);
     setIsUpdatingStatus(true);
     try {
@@ -134,7 +161,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
   return (
     <>
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div
           className="modal-content"
           onClick={(e) => e.stopPropagation()}
@@ -150,6 +177,34 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             backgroundColor: '#f8fafc'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    padding: '5px 12px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                  title="이전 목록으로 돌아가기"
+                >
+                  <ChevronLeft size={16} />
+                  <span>{backLabel || '뒤로가기'}</span>
+                </button>
+              )}
+
               {renderTierBadge()}
 
               {item.itemStatus === 'SOLD' && (
@@ -180,18 +235,44 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               )}
             </div>
 
-            <button
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#64748b',
-                cursor: 'pointer',
-                padding: '4px'
-              }}
-            >
-              <X size={20} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {!isOwner && onOpenReport && (
+                <button
+                  type="button"
+                  onClick={() => onOpenReport(item)}
+                  style={{
+                    background: '#fff1f2',
+                    border: '1px solid #fecdd3',
+                    color: '#e11d48',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="허위매물 / 가품 의심 신고"
+                >
+                  <Flag size={12} />
+                  <span>신고</span>
+                </button>
+              )}
+
+              <button
+                onClick={onClose}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Error Notification */}
@@ -423,68 +504,148 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
               {/* Owner Action Panel or Buyer Chat Button */}
               {isOwner ? (
-                <div style={{
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  marginBottom: '16px'
-                }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
-                    내 등록 매물 관리
+                item.itemStatus === 'SOLD' ? (
+                  /* Permanent Lock Alert for SOLD item */
+                  <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '10px',
+                    padding: '14px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontWeight: 800, fontSize: '0.88rem', marginBottom: '4px' }}>
+                      <ShieldCheck size={18} color="#d97706" />
+                      <span>🔒 실거래 시세 아카이브 영구 보존 매물</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#b45309', lineHeight: '1.5' }}>
+                      본 매물은 <strong>거래완료(SOLD)</strong> 처리되어 타임링크 시세 투명성 정책에 따라 <strong>상태 복구(판매중/예약중) 및 게시글 삭제가 영구적으로 제한</strong>됩니다.
+                    </p>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                ) : (
+                  <div style={{
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+                        내 등록 매물 관리
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                        * 거래완료 시 시세 아카이브로 영구 보존됩니다.
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button
+                        onClick={() => handleStatusUpdate('FOR_SALE')}
+                        disabled={isUpdatingStatus}
+                        className={item.itemStatus === 'FOR_SALE' ? 'btn-primary' : 'btn-secondary'}
+                        style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                      >
+                        판매중
+                      </button>
+                      <button
+                        onClick={() => handleStatusUpdate('RESERVED')}
+                        disabled={isUpdatingStatus}
+                        className={item.itemStatus === 'RESERVED' ? 'btn-primary' : 'btn-secondary'}
+                        style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                      >
+                        예약중
+                      </button>
+                      <button
+                        onClick={() => handleStatusUpdate('SOLD')}
+                        disabled={isUpdatingStatus}
+                        className="btn-secondary"
+                        style={{
+                          fontSize: '0.78rem',
+                          padding: '6px 12px',
+                          color: '#dc2626',
+                          borderColor: '#fca5a5',
+                          fontWeight: 700
+                        }}
+                        title="거래완료 시 시세 아카이브에 영구 등록됩니다."
+                      >
+                        거래완료(SOLD) 처리
+                      </button>
+
+                      {onEditItem && (
+                        <button
+                          type="button"
+                          onClick={() => onEditItem(item)}
+                          className="btn-secondary"
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '6px 12px',
+                            color: '#1d4ed8',
+                            borderColor: '#bfdbfe',
+                            backgroundColor: '#eff6ff',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="매물 정보 수정 (가격 인하, 설명, 사진 변경)"
+                        >
+                          <Edit3 size={13} />
+                          <span>수정</span>
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        style={{
+                          marginLeft: 'auto',
+                          background: 'transparent',
+                          border: '1px solid #ef4444',
+                          color: '#ef4444',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.78rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title="매물 삭제"
+                      >
+                        <Trash2 size={13} />
+                        <span>삭제</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* Contact / Deal button, Wishlist like button & Review button for buyers */
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  {onToggleLike && (
                     <button
-                      onClick={() => handleStatusUpdate('FOR_SALE')}
-                      disabled={isUpdatingStatus}
-                      className={item.itemStatus === 'FOR_SALE' ? 'btn-primary' : 'btn-secondary'}
-                      style={{ fontSize: '0.78rem', padding: '6px 12px' }}
-                    >
-                      판매중
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate('RESERVED')}
-                      disabled={isUpdatingStatus}
-                      className={item.itemStatus === 'RESERVED' ? 'btn-primary' : 'btn-secondary'}
-                      style={{ fontSize: '0.78rem', padding: '6px 12px' }}
-                    >
-                      예약중
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate('SOLD')}
-                      disabled={isUpdatingStatus}
-                      className={item.itemStatus === 'SOLD' ? 'btn-primary' : 'btn-secondary'}
-                      style={{ fontSize: '0.78rem', padding: '6px 12px', background: item.itemStatus === 'SOLD' ? '#dc2626' : undefined, color: item.itemStatus === 'SOLD' ? '#fff' : undefined }}
-                    >
-                      거래완료(SOLD)
-                    </button>
-                    
-                    <button
-                      onClick={handleDelete}
-                      disabled={isDeleting}
+                      type="button"
+                      onClick={onToggleLike}
                       style={{
-                        marginLeft: 'auto',
-                        background: 'transparent',
-                        border: '1px solid #ef4444',
-                        color: '#ef4444',
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.78rem',
-                        cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: isLiked ? '1px solid #fca5a5' : '1px solid #cbd5e1',
+                        backgroundColor: isLiked ? '#fef2f2' : '#ffffff',
+                        color: isLiked ? '#ef4444' : '#64748b',
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
                       }}
-                      title="거래 완료 매물은 실거래 시세 참고용으로 보존됩니다."
+                      title={isLiked ? '관심 매물(찜) 해제' : '관심 매물(찜) 등록'}
                     >
-                      <Trash2 size={13} />
-                      <span>삭제</span>
+                      <Heart size={18} fill={isLiked ? '#ef4444' : 'none'} color={isLiked ? '#ef4444' : '#64748b'} />
+                      <span>{item.likeCount ?? 0}</span>
                     </button>
-                  </div>
-                </div>
-              ) : (
-                /* Contact / Deal button & Review button for buyers */
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  )}
+
                   <button
                     className="btn-primary"
                     style={{ flex: 1, justifyContent: 'center', padding: '12px', fontSize: '0.88rem' }}

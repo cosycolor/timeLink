@@ -11,10 +11,15 @@ import { SellerProfileModal } from './components/SellerProfileModal.tsx';
 import { ChatModal } from './components/ChatModal.tsx';
 import { ChatListModal, ChatThread } from './components/ChatListModal.tsx';
 import { MyProfileModal } from './components/MyProfileModal.tsx';
+import { MyListingsModal } from './components/MyListingsModal.tsx';
+import { ItemEditModal } from './components/ItemEditModal.tsx';
+import { ReportModal } from './components/ReportModal.tsx';
 import { ReviewModal } from './components/ReviewModal.tsx';
+import { AuthModal } from './components/AuthModal.tsx';
+import { TermsModal, TermsTab } from './components/TermsModal.tsx';
 import { CategoryTier, ItemStatus, UserProfile, WatchItem } from './types.ts';
-import { api, setAuthUserId } from './api.ts';
-import { Shield, Sparkles, TrendingUp, AlertCircle, CheckCircle, Check, ArrowRight, MessageSquare } from 'lucide-react';
+import { api, getAuthToken, setAuthUserId } from './api.ts';
+import { Shield, Sparkles, TrendingUp, AlertCircle, CheckCircle, Check, ArrowRight, MessageSquare, Heart } from 'lucide-react';
 
 export const App: React.FC = () => {
   // State
@@ -29,22 +34,36 @@ export const App: React.FC = () => {
   });
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Filters
+  // Auth Modal state
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalTab, setAuthModalTab] = useState<'LOGIN' | 'SIGNUP' | 'FORGOT_PASSWORD'>('LOGIN');
+
+  // Terms Modal state
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState<boolean>(false);
+  const [termsModalTab, setTermsModalTab] = useState<TermsTab>('TERMS');
+
+  // Filters & Wishlist state
   const [currentTier, setCurrentTier] = useState<CategoryTier | 'ALL'>('ALL');
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
   const [availableOnly, setAvailableOnly] = useState<boolean>(false);
   const [sortOrder, setSortOrder] = useState<'LATEST' | 'PRICE_DESC' | 'PRICE_ASC' | 'VIEWS'>('LATEST');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
+  const [likedItemIds, setLikedItemIds] = useState<number[]>([]);
+  const [wishlistOnly, setWishlistOnly] = useState<boolean>(false);
 
   // Modals
   const [selectedItem, setSelectedItem] = useState<WatchItem | null>(null);
   const [selectedSellerId, setSelectedSellerId] = useState<number | null>(null);
-  const [chatItem, setChatItem] = useState<WatchItem | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ threadId?: string; item: WatchItem; otherUser?: any } | null>(null);
   const [isChatListOpen, setIsChatListOpen] = useState<boolean>(false);
   const [isMyProfileOpen, setIsMyProfileOpen] = useState<boolean>(false);
+  const [isMyListingsOpen, setIsMyListingsOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState<boolean>(false);
+  const [editingItem, setEditingItem] = useState<WatchItem | null>(null);
+  const [reportTarget, setReportTarget] = useState<{ targetItemId?: number; targetSellerId?: number; itemSummary?: string; sellerNickname?: string } | null>(null);
   const [reviewTarget, setReviewTarget] = useState<{ sellerId: number; nickname: string; itemSummary?: string } | null>(null);
+  const [detailBackAction, setDetailBackAction] = useState<{ label: string; action: () => void } | null>(null);
 
   // Chat Threads state
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
@@ -59,16 +78,68 @@ export const App: React.FC = () => {
     }, 4000);
   };
 
-  // Load User Profile
+  // Require Auth Helper
+  const requireAuth = (callback: () => void, message = '해당 기능을 이용하려면 로그인이 필요합니다.') => {
+    if (!userProfile) {
+      showToast(message, 'info');
+      setAuthModalTab('LOGIN');
+      setIsAuthModalOpen(true);
+      return;
+    }
+    callback();
+  };
+
+  // Load User Profile (Session check)
   const loadProfile = useCallback(async () => {
     try {
-      setAuthUserId(currentUserId);
+      const token = getAuthToken();
+      if (!token) {
+        // If no JWT stored, check if legacy currentUserId exists or default to guest
+        // For smoother demo we can try loading profile
+        try {
+          const profile = await api.getMyProfile();
+          setUserProfile(profile);
+          setCurrentUserId(profile.userId);
+        } catch {
+          setUserProfile(null);
+        }
+        return;
+      }
       const profile = await api.getMyProfile();
       setUserProfile(profile);
+      setCurrentUserId(profile.userId);
     } catch (err: any) {
-      console.error('Failed to load profile:', err);
+      console.warn('Session expired or guest state:', err);
+      setUserProfile(null);
     }
-  }, [currentUserId]);
+  }, []);
+
+  // Handle Login / Signup Success
+  const handleAuthSuccess = (user: UserProfile) => {
+    setUserProfile(user);
+    setCurrentUserId(user.userId);
+    showToast(`환영합니다, ${user.nickname}님! 타임링크에 로그인되었습니다.`, 'success');
+    loadItems();
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    api.logout();
+    setUserProfile(null);
+    showToast('안전하게 로그아웃되었습니다.', 'info');
+  };
+
+  // Load Chat Threads from persistent backend
+  const loadChatThreads = useCallback(async () => {
+    if (!userProfile) {
+      setChatThreads([]);
+      return;
+    }
+    try {
+      const threadList = await api.getChatThreads();
+      setChatThreads(threadList);
+    } catch {}
+  }, [userProfile]);
 
   // Load Items with current filters
   const loadItems = useCallback(async () => {
@@ -85,47 +156,26 @@ export const App: React.FC = () => {
       if (res.counts) {
         setTabCounts(res.counts);
       }
-
-      // Initialize initial sample chat threads if empty
-      if (res.data.length > 0) {
-        setChatThreads(prev => {
-          if (prev.length > 0) return prev;
-          const rolexItem = res.data.find(i => i.brand === 'ROLEX') || res.data[0];
-          const omegaItem = res.data.find(i => i.brand === 'OMEGA') || res.data[1] || res.data[0];
-          return [
-            {
-              threadId: 't1',
-              item: rolexItem,
-              otherUser: {
-                userId: 2,
-                nickname: '빈티지워치스',
-                mannerScore: 38
-              },
-              lastMessage: '안녕하세요! 서브마리너 매물 평일 낮 강남역 인근 은행 직거래 가능할까요?',
-              lastMessageTime: '10분 전',
-              unreadCount: 1
-            },
-            {
-              threadId: 't2',
-              item: omegaItem,
-              otherUser: {
-                userId: 1,
-                nickname: '강남타임마스터',
-                mannerScore: 42
-              },
-              lastMessage: '보증서 풀세트 확인 완료했습니다. 내일 오후 2시에 뵙겠습니다.',
-              lastMessageTime: '1시간 전',
-              unreadCount: 0
-            }
-          ];
-        });
-      }
     } catch (err: any) {
       showToast(err.message || '매물 목록을 불러오지 못했습니다.', 'error');
     } finally {
       setLoading(false);
     }
   }, [currentTier, selectedBrand, availableOnly, sortOrder, searchKeyword]);
+
+  // Load Liked Item IDs
+  const loadLikedItemIds = useCallback(async () => {
+    if (!userProfile) {
+      setLikedItemIds([]);
+      return;
+    }
+    try {
+      const ids = await api.getMyLikedItemIds();
+      setLikedItemIds(ids);
+    } catch {
+      setLikedItemIds([]);
+    }
+  }, [userProfile]);
 
   useEffect(() => {
     loadProfile();
@@ -135,11 +185,37 @@ export const App: React.FC = () => {
     loadItems();
   }, [loadItems]);
 
-  // Handler for user switcher
-  const handleSwitchUser = (userId: number) => {
-    setCurrentUserId(userId);
-    setAuthUserId(userId);
-    showToast(`테스트 계정이 [ID: ${userId}] 로 변경되었습니다.`, 'info');
+  useEffect(() => {
+    loadLikedItemIds();
+  }, [loadLikedItemIds]);
+
+  useEffect(() => {
+    loadChatThreads();
+    const interval = setInterval(loadChatThreads, 5000);
+    return () => clearInterval(interval);
+  }, [loadChatThreads]);
+
+  // Handler for toggle wishlist like
+  const handleToggleLike = async (itemId: number) => {
+    requireAuth(async () => {
+      const targetItem = items.find(i => i.itemId === itemId) || (selectedItem?.itemId === itemId ? selectedItem : null);
+      if (userProfile && targetItem && targetItem.sellerId === userProfile.userId) {
+        showToast('본인이 등록한 매물은 관심 매물(찜)로 등록할 수 없습니다.', 'error');
+        return;
+      }
+
+      try {
+        const res = await api.toggleItemLike(itemId);
+        setLikedItemIds(prev => res.liked ? [...prev, itemId] : prev.filter(id => id !== itemId));
+        setItems(prev => prev.map(i => i.itemId === itemId ? { ...i, likeCount: res.likeCount } : i));
+        if (selectedItem && selectedItem.itemId === itemId) {
+          setSelectedItem(prev => prev ? { ...prev, likeCount: res.likeCount } : null);
+        }
+        showToast(res.liked ? '관심 매물(찜)에 등록되었습니다.' : '관심 매물(찜)이 해제되었습니다.', 'info');
+      } catch (err: any) {
+        showToast(err.message || '관심 매물 설정에 실패했습니다.', 'error');
+      }
+    }, '관심 매물(찜) 등록을 위해 로그인이 필요합니다.');
   };
 
   // Handler for item detail click
@@ -203,18 +279,38 @@ export const App: React.FC = () => {
       <Header
         userProfile={userProfile}
         onOpenCreate={() => {
-          if (!userProfile?.isPhoneVerified) {
-            setIsPhoneModalOpen(true);
-            showToast('매물 등록을 위해 먼저 휴대폰 본인인증을 진행해주세요.', 'info');
-          } else {
-            setIsCreateModalOpen(true);
-          }
+          requireAuth(() => {
+            if (!userProfile?.isPhoneVerified) {
+              setIsPhoneModalOpen(true);
+              showToast('매물 등록을 위해 먼저 휴대폰 본인인증을 진행해주세요.', 'info');
+            } else {
+              setIsCreateModalOpen(true);
+            }
+          }, '매물 등록을 위해 로그인이 필요합니다.');
         }}
-        onOpenPhoneVerify={() => setIsPhoneModalOpen(true)}
-        onOpenMyProfile={() => setIsMyProfileOpen(true)}
-        onOpenChatList={() => setIsChatListOpen(true)}
+        onOpenPhoneVerify={() => {
+          requireAuth(() => setIsPhoneModalOpen(true), '본인인증을 위해 로그인이 필요합니다.');
+        }}
+        onOpenMyProfile={() => {
+          requireAuth(() => setIsMyProfileOpen(true), '내 정보 조회를 위해 로그인이 필요합니다.');
+        }}
+        onOpenMyListings={() => {
+          requireAuth(() => setIsMyListingsOpen(true), '내 매물 관리를 위해 로그인이 필요합니다.');
+        }}
+        onOpenChatList={() => {
+          requireAuth(() => setIsChatListOpen(true), '채팅 목록 조회를 위해 로그인이 필요합니다.');
+        }}
         unreadChatCount={chatThreads.reduce((acc, t) => acc + t.unreadCount, 0)}
-        onSwitchUser={handleSwitchUser}
+        wishlistOnly={wishlistOnly}
+        onToggleWishlistOnly={() => {
+          requireAuth(() => setWishlistOnly(prev => !prev), '관심 매물 조회를 위해 로그인이 필요합니다.');
+        }}
+        likedCount={likedItemIds.length}
+        onOpenAuth={(tab) => {
+          setAuthModalTab(tab || 'LOGIN');
+          setIsAuthModalOpen(true);
+        }}
+        onLogout={handleLogout}
         currentUserId={currentUserId}
       />
 
@@ -351,19 +447,55 @@ export const App: React.FC = () => {
           onChangeSearchKeyword={setSearchKeyword}
         />
 
+        {/* Wishlist Active Filter Banner */}
+        {wishlistOnly && (
+          <div style={{
+            marginBottom: '16px',
+            padding: '12px 18px',
+            borderRadius: '10px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            color: '#991b1b'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem', fontWeight: 600 }}>
+              <Heart size={16} fill="#ef4444" color="#ef4444" />
+              <span>내가 찜한 관심 매물 ({(wishlistOnly ? items.filter(i => likedItemIds.includes(i.itemId)) : items).length}개)을 모아보고 있습니다.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWishlistOnly(false)}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #fca5a5',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                color: '#dc2626',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              전체 매물 보기
+            </button>
+          </div>
+        )}
+
         {/* 5. Watch Items Grid List */}
         {loading ? (
           <div style={{ padding: '60px 0', textAlign: 'center', color: '#64748b' }}>
             매물 목록을 불러오는 중입니다...
           </div>
-        ) : items.length === 0 ? (
+        ) : (wishlistOnly ? items.filter(i => likedItemIds.includes(i.itemId)) : items).length === 0 ? (
           <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '60px 20px', textAlign: 'center' }}>
             <AlertCircle size={40} color="#94a3b8" style={{ margin: '0 auto 12px auto' }} />
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
-              조건에 일치하는 매물이 없습니다.
+              {wishlistOnly ? '찜한 관심 매물이 없습니다.' : '조건에 일치하는 매물이 없습니다.'}
             </h3>
             <p style={{ fontSize: '0.82rem', color: '#64748b' }}>
-              검색어나 브랜드 필터를 변경하거나 새로운 매물을 등록해보세요.
+              {wishlistOnly ? '마음에 드는 시계의 하트(찜) 아이콘을 눌러 관심 매물로 등록해보세요.' : '검색어나 브랜드 필터를 변경하거나 새로운 매물을 등록해보세요.'}
             </p>
           </div>
         ) : (
@@ -372,11 +504,18 @@ export const App: React.FC = () => {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: '18px'
           }}>
-            {items.map(item => (
+            {(wishlistOnly ? items.filter(i => likedItemIds.includes(i.itemId)) : items).map(item => (
               <ItemCard
                 key={item.itemId}
                 item={item}
-                onClick={() => handleOpenDetail(item)}
+                onClick={() => {
+                  setDetailBackAction(null);
+                  handleOpenDetail(item);
+                }}
+                isLiked={likedItemIds.includes(item.itemId)}
+                onToggleLike={() => handleToggleLike(item.itemId)}
+                isOwner={userProfile?.userId === item.sellerId}
+                currentUserId={userProfile?.userId}
               />
             ))}
           </div>
@@ -388,15 +527,36 @@ export const App: React.FC = () => {
       {selectedItem && (
         <ItemDetailModal
           item={selectedItem}
-          onClose={() => setSelectedItem(null)}
+          onClose={() => {
+            setSelectedItem(null);
+            setDetailBackAction(null);
+          }}
+          onBack={detailBackAction ? detailBackAction.action : undefined}
+          backLabel={detailBackAction?.label}
           onStatusChange={handleStatusChange}
           onDelete={handleDeleteItem}
-          onOpenSellerProfile={(sellerId) => setSelectedSellerId(sellerId)}
-          onOpenChat={(item) => setChatItem(item)}
-          onOpenReview={(sellerId, nickname, itemSummary) => {
-            setReviewTarget({ sellerId, nickname, itemSummary });
+          onOpenSellerProfile={(sellerId) => {
+            setSelectedItem(null);
+            setSelectedSellerId(sellerId);
           }}
-          currentUserId={currentUserId}
+          onOpenChat={(item) => {
+            requireAuth(() => setChatTarget({ item }), '판매자와 1:1 직거래 대화를 시작하려면 로그인이 필요합니다.');
+          }}
+          onOpenReview={(sellerId, nickname, itemSummary) => {
+            requireAuth(() => setReviewTarget({ sellerId, nickname, itemSummary }), '거래 후기를 작성하려면 로그인이 필요합니다.');
+          }}
+          onOpenReport={(item) => {
+            requireAuth(() => setReportTarget({
+              targetItemId: item.itemId,
+              targetSellerId: item.sellerId,
+              itemSummary: `${item.brand} ${item.modelName}`,
+              sellerNickname: item.seller?.nickname
+            }), '신고 기능을 이용하려면 로그인이 필요합니다.');
+          }}
+          isLiked={likedItemIds.includes(selectedItem.itemId)}
+          onToggleLike={() => handleToggleLike(selectedItem.itemId)}
+          onEditItem={(item) => setEditingItem(item)}
+          currentUserId={userProfile?.userId || 0}
         />
       )}
 
@@ -406,27 +566,43 @@ export const App: React.FC = () => {
           sellerId={selectedSellerId}
           onClose={() => setSelectedSellerId(null)}
           onSelectItem={(item) => {
-            setSelectedItem(item);
+            const sid = selectedSellerId;
+            setSelectedSellerId(null);
+            setDetailBackAction({
+              label: '판매자 프로필',
+              action: () => {
+                setSelectedItem(null);
+                setSelectedSellerId(sid);
+                setDetailBackAction(null);
+              }
+            });
+            handleOpenDetail(item);
           }}
           onOpenReview={(sellerId, nickname) => {
-            setReviewTarget({ sellerId, nickname });
+            requireAuth(() => setReviewTarget({ sellerId, nickname }), '거래 후기를 작성하려면 로그인이 필요합니다.');
           }}
-          currentUserId={currentUserId}
+          currentUserId={userProfile?.userId || 0}
         />
       )}
 
       {/* 1:1 Direct Chat Modal */}
-      {chatItem && (
+      {chatTarget && (
         <ChatModal
-          item={chatItem}
+          item={chatTarget.item}
+          initialThreadId={chatTarget.threadId}
+          initialOtherUser={chatTarget.otherUser}
           currentUserId={currentUserId}
-          onClose={() => setChatItem(null)}
+          onClose={() => setChatTarget(null)}
           onBackToList={() => {
-            setChatItem(null);
+            setChatTarget(null);
             setIsChatListOpen(true);
           }}
           onOpenReview={(sellerId, nickname, itemSummary) => {
-            setReviewTarget({ sellerId, nickname, itemSummary });
+            requireAuth(() => setReviewTarget({ sellerId, nickname, itemSummary }), '거래 후기를 작성하려면 로그인이 필요합니다.');
+          }}
+          onItemStatusChanged={() => {
+            loadItems();
+            loadChatThreads();
           }}
         />
       )}
@@ -438,7 +614,20 @@ export const App: React.FC = () => {
           onClose={() => setIsChatListOpen(false)}
           onSelectThread={(thread) => {
             setIsChatListOpen(false);
-            setChatItem(thread.item);
+            setChatTarget({
+              threadId: thread.threadId,
+              item: thread.item,
+              otherUser: thread.otherUser
+            });
+          }}
+          onDeleteThread={async (threadId) => {
+            try {
+              await api.deleteChatThread(threadId);
+              loadChatThreads();
+              showToast('대화방을 나갔습니다.', 'info');
+            } catch (err: any) {
+              showToast(err.message || '대화방 삭제에 실패했습니다.', 'error');
+            }
           }}
         />
       )}
@@ -455,6 +644,72 @@ export const App: React.FC = () => {
           onOpenPhoneVerify={() => {
             setIsMyProfileOpen(false);
             setIsPhoneModalOpen(true);
+          }}
+          onWithdrawSuccess={() => {
+            setUserProfile(null);
+            setCurrentUserId(0);
+            loadItems();
+            loadChatThreads();
+            showToast('회원 탈퇴가 완료되었습니다. 세션이 종료되었습니다.', 'info');
+          }}
+        />
+      )}
+
+      {/* My Listings Modal */}
+      {isMyListingsOpen && (
+        <MyListingsModal
+          onClose={() => setIsMyListingsOpen(false)}
+          onSelectItem={(item) => {
+            setIsMyListingsOpen(false);
+            setDetailBackAction({
+              label: '내 매물 관리',
+              action: () => {
+                setSelectedItem(null);
+                setIsMyListingsOpen(true);
+                setDetailBackAction(null);
+              }
+            });
+            handleOpenDetail(item);
+          }}
+          onEditItem={(item) => {
+            setEditingItem(item);
+          }}
+          onItemUpdated={() => {
+            loadItems();
+            loadProfile();
+          }}
+        />
+      )}
+
+      {/* Item Edit Modal */}
+      {editingItem && (
+        <ItemEditModal
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSuccess={(updated) => {
+            setItems(prev => prev.map(i => i.itemId === updated.itemId ? updated : i));
+            if (selectedItem && selectedItem.itemId === updated.itemId) {
+              setSelectedItem(updated);
+            }
+            loadItems();
+            loadProfile();
+            showToast('매물 정보가 성공적으로 수정되었습니다.', 'success');
+          }}
+        />
+      )}
+
+      {/* Fraud / Abuse Report Modal */}
+      {reportTarget && (
+        <ReportModal
+          targetItemId={reportTarget.targetItemId}
+          targetSellerId={reportTarget.targetSellerId}
+          itemSummary={reportTarget.itemSummary}
+          sellerNickname={reportTarget.sellerNickname}
+          onClose={() => setReportTarget(null)}
+          onSuccess={() => {
+            loadItems();
+            if (selectedItem) setSelectedItem(null);
+            showToast('신고가 정상 접수되었습니다. 매물이 검토됩니다.', 'success');
           }}
         />
       )}
@@ -495,7 +750,33 @@ export const App: React.FC = () => {
       {isPhoneModalOpen && (
         <PhoneVerificationModal
           onClose={() => setIsPhoneModalOpen(false)}
-          onVerify={handleVerifyPhone}
+          initialPhoneNumber={userProfile?.phoneNumber || ''}
+          onSuccess={(updatedUser) => {
+            setUserProfile(updatedUser);
+            loadProfile();
+            showToast('휴대폰 실명 인증이 완료되었습니다! 매물 등록 권한이 활성화되었습니다.', 'success');
+          }}
+        />
+      )}
+
+      {/* Auth Modal (Login / Signup / Forgot Password) */}
+      {isAuthModalOpen && (
+        <AuthModal
+          initialTab={authModalTab}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={handleAuthSuccess}
+          onOpenTerms={(tab) => {
+            setTermsModalTab(tab);
+            setIsTermsModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Terms & Policies Full Modal */}
+      {isTermsModalOpen && (
+        <TermsModal
+          initialTab={termsModalTab}
+          onClose={() => setIsTermsModalOpen(false)}
         />
       )}
 
@@ -512,11 +793,55 @@ export const App: React.FC = () => {
             <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
               TIMELINK <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>타임링크</span>
             </span>
-            <div style={{ display: 'flex', gap: '16px', color: '#475569' }}>
-              <span>이용약관</span>
-              <span>개인정보처리방침</span>
-              <span>안전직거래가이드</span>
-              <span>시세아카이브정책</span>
+            <div style={{ display: 'flex', gap: '16px', color: '#475569', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setTermsModalTab('TERMS');
+                  setIsTermsModalOpen(true);
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#475569', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
+              >
+                이용약관
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTermsModalTab('PRIVACY');
+                  setIsTermsModalOpen(true);
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#475569', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
+              >
+                개인정보처리방침
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTermsModalTab('SAFETY_GUIDE');
+                  setIsTermsModalOpen(true);
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#475569', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
+              >
+                안전직거래가이드
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTermsModalTab('ARCHIVE_POLICY');
+                  setIsTermsModalOpen(true);
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#475569', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
+              >
+                시세아카이브정책
+              </button>
             </div>
           </div>
           <p style={{ margin: 0, lineHeight: '1.6' }}>

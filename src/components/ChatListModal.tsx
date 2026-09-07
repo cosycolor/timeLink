@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, MessageSquare, Clock, User, CheckCircle2, ChevronRight } from 'lucide-react';
+import { X, MessageSquare, Clock, User, CheckCircle2, ChevronRight, Trash2 } from 'lucide-react';
 import { WatchItem } from '../types.ts';
 
 export interface ChatThread {
@@ -19,23 +19,27 @@ interface ChatListModalProps {
   threads: ChatThread[];
   onClose: () => void;
   onSelectThread: (thread: ChatThread) => void;
+  onDeleteThread?: (threadId: string) => void;
 }
 
 export const ChatListModal: React.FC<ChatListModalProps> = ({
   threads,
   onClose,
-  onSelectThread
+  onSelectThread,
+  onDeleteThread
 }) => {
   const formatPrice = (price: number) => {
     return `${price.toLocaleString()}원`;
   };
 
+  const totalUnread = threads.reduce((acc, t) => acc + t.unreadCount, 0);
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '520px', padding: 0, overflow: 'hidden' }}
+        style={{ maxWidth: '540px', padding: 0, overflow: 'hidden', borderRadius: '16px' }}
       >
         {/* Header */}
         <div style={{
@@ -44,36 +48,39 @@ export const ChatListModal: React.FC<ChatListModalProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#f8fafc'
+          backgroundColor: '#0f172a',
+          color: '#ffffff'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MessageSquare size={19} color="#2563eb" />
-            <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#0f172a' }}>
-              직거래 채팅 목록
+            <MessageSquare size={20} color="#38bdf8" />
+            <span style={{ fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.3px' }}>
+              직거래 1:1 대화 목록
             </span>
-            <span style={{
-              fontSize: '0.75rem',
-              color: '#ffffff',
-              background: '#2563eb',
-              padding: '1px 7px',
-              borderRadius: '10px',
-              fontWeight: 700
-            }}>
-              {threads.reduce((acc, t) => acc + t.unreadCount, 0)}
-            </span>
+            {totalUnread > 0 && (
+              <span style={{
+                fontSize: '0.72rem',
+                color: '#ffffff',
+                background: '#ef4444',
+                padding: '2px 7px',
+                borderRadius: '10px',
+                fontWeight: 800
+              }}>
+                {totalUnread}
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '30px', height: '30px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Thread List */}
         <div style={{ maxHeight: '520px', overflowY: 'auto' }}>
           {threads.length === 0 ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
+            <div style={{ padding: '50px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
               진행 중인 직거래 대화가 없습니다.
             </div>
           ) : (
@@ -129,8 +136,8 @@ export const ChatListModal: React.FC<ChatListModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Unread badge & arrow */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {/* Actions & Unread */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {thread.unreadCount > 0 && (
                       <span style={{
                         width: '18px',
@@ -147,6 +154,35 @@ export const ChatListModal: React.FC<ChatListModalProps> = ({
                         {thread.unreadCount}
                       </span>
                     )}
+
+                    {onDeleteThread && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('이 대화방을 나가시겠습니까?')) {
+                            onDeleteThread(thread.threadId);
+                          }
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#94a3b8',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="대화방 나가기"
+                        onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+
                     <ChevronRight size={16} color="#cbd5e1" />
                   </div>
                 </div>
@@ -158,3 +194,4 @@ export const ChatListModal: React.FC<ChatListModalProps> = ({
     </div>
   );
 };
+

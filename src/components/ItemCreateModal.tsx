@@ -266,14 +266,7 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
   };
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          handleSafeClose();
-        }
-      }}
-    >
+    <div className="modal-overlay">
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
