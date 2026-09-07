@@ -465,7 +465,67 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
             </div>
           </div>
 
-          {/* 2. Structured Metadata Form */}
+          {/* 2. Price & Trade Type */}
+          <div style={{
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '10px',
+            padding: '16px',
+            marginBottom: '20px'
+          }}>
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+              가격 및 거래 방식
+            </h4>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: '#475569', marginBottom: '4px', fontWeight: 600 }}>
+                  판매 희망가 (원) <RequiredBadge />
+                </label>
+                <input
+                  type="text"
+                  placeholder="숫자만 입력 (예: 15000000)"
+                  value={priceStr}
+                  onChange={handlePriceChange}
+                  className="form-input"
+                  style={{ fontSize: '1.05rem', fontWeight: 700 }}
+                  required
+                />
+                <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                  {priceStr ? `${Number(priceStr).toLocaleString()} 원` : ''}
+                </span>
+              </div>
+
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: '#475569', marginBottom: '4px', fontWeight: 600 }}>
+                  거래 방식 <OptionalBadge />
+                </label>
+                <select
+                  value={tradeType}
+                  onChange={(e) => setTradeType(e.target.value as any)}
+                  className="form-select"
+                >
+                  <option value="DIRECT_ONLY">대면 직거래 (권장)</option>
+                  <option value="DELIVERY_AVAILABLE">직거래 / 택배 병행</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: '#475569', marginBottom: '4px', fontWeight: 600 }}>
+                  선호 거래 장소 <OptionalBadge />
+                </label>
+                <input
+                  type="text"
+                  placeholder="(선택) 예: 서울 강남역 인근 은행, 분당 판교역 등"
+                  value={preferredLocation}
+                  onChange={(e) => setPreferredLocation(e.target.value)}
+                  className="form-input"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Structured Metadata Form */}
           <div style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
@@ -648,66 +708,6 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
                   />
                   <span>마디</span>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Price & Trade Type */}
-          <div style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '10px',
-            padding: '16px',
-            marginBottom: '20px'
-          }}>
-            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-              가격 및 거래 방식
-            </h4>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: '#475569', marginBottom: '4px', fontWeight: 600 }}>
-                  판매 희망가 (원) <RequiredBadge />
-                </label>
-                <input
-                  type="text"
-                  placeholder="숫자만 입력 (예: 15000000)"
-                  value={priceStr}
-                  onChange={handlePriceChange}
-                  className="form-input"
-                  style={{ fontSize: '1.05rem', fontWeight: 700 }}
-                  required
-                />
-                <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                  {priceStr ? `${Number(priceStr).toLocaleString()} 원` : ''}
-                </span>
-              </div>
-
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: '#475569', marginBottom: '4px', fontWeight: 600 }}>
-                  거래 방식 <OptionalBadge />
-                </label>
-                <select
-                  value={tradeType}
-                  onChange={(e) => setTradeType(e.target.value as any)}
-                  className="form-select"
-                >
-                  <option value="DIRECT_ONLY">대면 직거래 (권장)</option>
-                  <option value="DELIVERY_AVAILABLE">직거래 / 택배 병행</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: '#475569', marginBottom: '4px', fontWeight: 600 }}>
-                  선호 거래 장소 <OptionalBadge />
-                </label>
-                <input
-                  type="text"
-                  placeholder="(선택) 예: 서울 강남역 인근 은행, 분당 판교역 등"
-                  value={preferredLocation}
-                  onChange={(e) => setPreferredLocation(e.target.value)}
-                  className="form-input"
-                />
               </div>
             </div>
           </div>
