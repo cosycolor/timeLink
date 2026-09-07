@@ -87,3 +87,16 @@ export interface CreateItemDTO {
     sortOrder: number;
   }[];
 }
+
+export interface UserReview {
+  reviewId: number;
+  sellerId: number;
+  reviewerId: number;
+  reviewerNickname: string;
+  rating: 'GREAT' | 'GOOD' | 'BAD';
+  tempDelta: number;
+  tags: string[];
+  comment: string;
+  itemSummary?: string;
+  createdAt: string;
+}

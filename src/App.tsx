@@ -11,6 +11,7 @@ import { SellerProfileModal } from './components/SellerProfileModal.tsx';
 import { ChatModal } from './components/ChatModal.tsx';
 import { ChatListModal, ChatThread } from './components/ChatListModal.tsx';
 import { MyProfileModal } from './components/MyProfileModal.tsx';
+import { ReviewModal } from './components/ReviewModal.tsx';
 import { CategoryTier, ItemStatus, UserProfile, WatchItem } from './types.ts';
 import { api, setAuthUserId } from './api.ts';
 import { Shield, Sparkles, TrendingUp, AlertCircle, CheckCircle, Check, ArrowRight, MessageSquare } from 'lucide-react';
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
   const [isMyProfileOpen, setIsMyProfileOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState<boolean>(false);
+  const [reviewTarget, setReviewTarget] = useState<{ sellerId: number; nickname: string; itemSummary?: string } | null>(null);
 
   // Chat Threads state
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
@@ -391,6 +393,9 @@ export const App: React.FC = () => {
           onDelete={handleDeleteItem}
           onOpenSellerProfile={(sellerId) => setSelectedSellerId(sellerId)}
           onOpenChat={(item) => setChatItem(item)}
+          onOpenReview={(sellerId, nickname, itemSummary) => {
+            setReviewTarget({ sellerId, nickname, itemSummary });
+          }}
           currentUserId={currentUserId}
         />
       )}
@@ -403,6 +408,10 @@ export const App: React.FC = () => {
           onSelectItem={(item) => {
             setSelectedItem(item);
           }}
+          onOpenReview={(sellerId, nickname) => {
+            setReviewTarget({ sellerId, nickname });
+          }}
+          currentUserId={currentUserId}
         />
       )}
 
@@ -415,6 +424,9 @@ export const App: React.FC = () => {
           onBackToList={() => {
             setChatItem(null);
             setIsChatListOpen(true);
+          }}
+          onOpenReview={(sellerId, nickname, itemSummary) => {
+            setReviewTarget({ sellerId, nickname, itemSummary });
           }}
         />
       )}
@@ -460,6 +472,21 @@ export const App: React.FC = () => {
           onOpenPhoneVerify={() => {
             setIsCreateModalOpen(false);
             setIsPhoneModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Review / Manner Rating Modal */}
+      {reviewTarget && (
+        <ReviewModal
+          sellerId={reviewTarget.sellerId}
+          sellerNickname={reviewTarget.nickname}
+          itemSummary={reviewTarget.itemSummary}
+          onClose={() => setReviewTarget(null)}
+          onReviewSubmitted={(newScore) => {
+            loadItems();
+            loadProfile();
+            showToast(`거래 후기 및 매너 평가가 등록되었습니다.${newScore ? ` (매너온도: ${newScore}℃)` : ''}`, 'success');
           }}
         />
       )}

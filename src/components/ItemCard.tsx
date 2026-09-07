@@ -38,20 +38,20 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
     if (item.categoryTier === 'HIGH_END') {
       return (
         <span className="badge-high-end">
-          <Crown size={11} /> 하이엔드
+          <Crown size={11} /> 1,000만원 이상
         </span>
       );
     }
     if (item.categoryTier === 'MID') {
       return (
         <span className="badge-mid">
-          <Watch size={11} /> 미드
+          <Watch size={11} /> 300만~1,000만
         </span>
       );
     }
     return (
       <span className="badge-entry">
-        엔트리
+        300만원 미만
       </span>
     );
   };

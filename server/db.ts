@@ -1,4 +1,4 @@
-import { User, WatchItem, ItemImage, CreateItemDTO, ItemStatus, CategoryTier } from './types.ts';
+import { User, WatchItem, ItemImage, CreateItemDTO, ItemStatus, CategoryTier, UserReview } from './types.ts';
 
 // In-Memory Database with realistic seed data
 class Database {
@@ -290,6 +290,46 @@ class Database {
   private nextItemId = 107;
   private nextImageId = 11;
   private nextUserId = 4;
+  private nextReviewId = 4;
+
+  private reviews: UserReview[] = [
+    {
+      reviewId: 1,
+      sellerId: 1,
+      reviewerId: 2,
+      reviewerNickname: '빈티지워치스',
+      rating: 'GREAT',
+      tempDelta: 0.5,
+      tags: ['약속 시간을 잘 지켜요', '시계 상태가 설명과 같아요', '친절하고 매너가 좋아요'],
+      comment: '은행 객장에서 안전하게 거래 잘 마쳤습니다. 보증서와 상태 모두 설명대로 완벽하네요!',
+      itemSummary: 'ROLEX 서브마리너 데이트 41mm',
+      createdAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString()
+    },
+    {
+      reviewId: 2,
+      sellerId: 1,
+      reviewerId: 3,
+      reviewerNickname: '시계수집가',
+      rating: 'GREAT',
+      tempDelta: 0.5,
+      tags: ['응답이 빨라요', '보증서 및 구성품이 꼼꼼해요'],
+      comment: '쿨거래 감사합니다. 질문에도 친절하게 답변해주셔서 안심하고 직거래했습니다.',
+      itemSummary: 'CARTIER 산토스 드 까르띠에 L',
+      createdAt: new Date(Date.now() - 3600000 * 24 * 12).toISOString()
+    },
+    {
+      reviewId: 3,
+      sellerId: 2,
+      reviewerId: 1,
+      reviewerNickname: '강남타임마스터',
+      rating: 'GREAT',
+      tempDelta: 0.5,
+      tags: ['시계 상태가 설명과 같아요', '약속 시간을 잘 지켜요'],
+      comment: '튜더 블랙베이 58 상태 최고입니다. 매너 있게 거래해주셔서 감사드립니다!',
+      itemSummary: 'TUDOR 블랙베이 58',
+      createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString()
+    }
+  ];
 
   public findUserById(userId: number): User | undefined {
     return this.users.find(u => u.userId === userId);
@@ -297,6 +337,45 @@ class Database {
 
   public findUserByEmail(email: string): User | undefined {
     return this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  public getReviewsBySeller(sellerId: number): UserReview[] {
+    return this.reviews.filter(r => r.sellerId === sellerId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public createReview(sellerId: number, reviewerId: number, data: {
+    rating: 'GREAT' | 'GOOD' | 'BAD';
+    tags: string[];
+    comment: string;
+    itemSummary?: string;
+  }): UserReview {
+    const seller = this.findUserById(sellerId);
+    if (!seller) throw new Error('SELLER_NOT_FOUND');
+    const reviewer = this.findUserById(reviewerId);
+    const reviewerNickname = reviewer ? reviewer.nickname : '익명 사용자';
+
+    let tempDelta = 0.5;
+    if (data.rating === 'GOOD') tempDelta = 0.2;
+    if (data.rating === 'BAD') tempDelta = -0.5;
+
+    seller.mannerScore = Math.min(99.9, Math.max(0, Number((seller.mannerScore + tempDelta).toFixed(1))));
+    seller.updatedAt = new Date().toISOString();
+
+    const newReview: UserReview = {
+      reviewId: this.nextReviewId++,
+      sellerId,
+      reviewerId,
+      reviewerNickname,
+      rating: data.rating,
+      tempDelta,
+      tags: data.tags || [],
+      comment: data.comment || '',
+      itemSummary: data.itemSummary,
+      createdAt: new Date().toISOString()
+    };
+
+    this.reviews.unshift(newReview);
+    return newReview;
   }
 
   public createUser(email: string, nickname: string, passwordHash: string): User {
@@ -307,7 +386,7 @@ class Database {
       nickname,
       isPhoneVerified: false,
       userRole: 'MEMBER',
-      mannerScore: 36,
+      mannerScore: 36.5,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

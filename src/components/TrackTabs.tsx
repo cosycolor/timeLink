@@ -81,10 +81,10 @@ export const TrackTabs: React.FC<TrackTabsProps> = ({
             <Watch size={18} color={currentTier === 'ENTRY' ? '#2563eb' : '#64748b'} />
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                엔트리
+                300만원 미만
               </div>
               <div style={{ fontSize: '0.72rem', color: currentTier === 'ENTRY' ? '#3b82f6' : '#64748b' }}>
-                론진, 세이코, 해밀턴 등
+                론진, 세이코, 해밀턴, 티쏘 등
               </div>
             </div>
           </div>
@@ -118,13 +118,13 @@ export const TrackTabs: React.FC<TrackTabsProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Watch size={18} color={currentTier === 'MID' ? '#7c3aed' : '#64748b'} />
+            <Sparkles size={18} color={currentTier === 'MID' ? '#7c3aed' : '#64748b'} />
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                미드
+                300만 ~ 1,000만원
               </div>
               <div style={{ fontSize: '0.72rem', color: currentTier === 'MID' ? '#7c3aed' : '#64748b' }}>
-                오메가, 튜더, 태그호이어 등
+                오메가, 튜더, 까르띠에, 태그호이어 등
               </div>
             </div>
           </div>
@@ -161,10 +161,10 @@ export const TrackTabs: React.FC<TrackTabsProps> = ({
             <Crown size={18} color={currentTier === 'HIGH_END' ? '#d97706' : '#64748b'} />
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                하이엔드
+                1,000만원 이상
               </div>
               <div style={{ fontSize: '0.72rem', color: currentTier === 'HIGH_END' ? '#b45309' : '#64748b' }}>
-                롤렉스, 까르띠에, AP 등
+                롤렉스, 오데마피게, 바쉐론 등
               </div>
             </div>
           </div>

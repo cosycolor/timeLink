@@ -7,7 +7,8 @@ import {
   Layers,
   AlertTriangle,
   Trash2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Sparkles
 } from 'lucide-react';
 import { CategoryTier, CreateItemPayload, MovementType, OriginType, TradeType, UserProfile } from '../types.ts';
 import { api } from '../api.ts';
@@ -397,7 +398,7 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
           {/* 1. Category 3-Tier Selection */}
           <div style={{ marginBottom: '22px' }}>
             <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
-              카테고리 선택 <RequiredBadge />
+              가격대 카테고리 <RequiredBadge />
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
               
@@ -414,10 +415,10 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                   <Watch size={15} color="#2563eb" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e40af' }}>엔트리</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e40af' }}>300만원 미만</span>
                 </div>
                 <p style={{ fontSize: '0.72rem', color: '#64748b', margin: 0 }}>
-                  300만 원 미만 (론진, 세이코, 해밀턴 등)
+                  론진, 세이코, 해밀턴, 티쏘 등
                 </p>
               </div>
 
@@ -433,11 +434,11 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                  <Watch size={15} color="#7c3aed" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#5b21b6' }}>미드</span>
+                  <Sparkles size={15} color="#7c3aed" />
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#5b21b6' }}>300만 ~ 1,000만원</span>
                 </div>
                 <p style={{ fontSize: '0.72rem', color: '#64748b', margin: 0 }}>
-                  300만 ~ 1,000만 원 (오메가, 튜더 등)
+                  오메가, 튜더, 까르띠에, 태그호이어 등
                 </p>
               </div>
 
@@ -454,10 +455,10 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                   <Crown size={15} color="#d97706" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#92400e' }}>하이엔드</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#92400e' }}>1,000만원 이상</span>
                 </div>
                 <p style={{ fontSize: '0.72rem', color: '#64748b', margin: 0 }}>
-                  1,000만 원 이상 (롤렉스, AP, 까르띠에 등)
+                  롤렉스, 오데마피게, 바쉐론 등
                 </p>
               </div>
 

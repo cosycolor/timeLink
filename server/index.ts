@@ -195,6 +195,7 @@ app.get('/api/v1/users/:userId/profile', (req: Request, res: Response) => {
 
   const completedSales = db.getCompletedSalesCountBySeller(userId);
   const sellerItems = db.getItemsBySeller(userId);
+  const reviews = db.getReviewsBySeller(userId);
 
   return res.json({
     success: true,
@@ -206,9 +207,55 @@ app.get('/api/v1/users/:userId/profile', (req: Request, res: Response) => {
       isPhoneVerified: user.isPhoneVerified,
       completedSalesCount: completedSales,
       joinedAt: user.createdAt,
-      items: sellerItems
+      items: sellerItems,
+      reviews
     }
   });
+});
+
+// GET /users/:userId/reviews
+app.get('/api/v1/users/:userId/reviews', (req: Request, res: Response) => {
+  const userId = parseInt(req.params.userId as string, 10);
+  const reviews = db.getReviewsBySeller(userId);
+  return res.json({
+    success: true,
+    data: reviews
+  });
+});
+
+// POST /users/:userId/reviews (판매자 매너온도 평가 및 거래 후기 작성)
+app.post('/api/v1/users/:userId/reviews', (req: Request, res: Response) => {
+  const reviewerId = getAuthenticatedUserId(req);
+  const sellerId = parseInt(req.params.userId as string, 10);
+  const { rating, tags, comment, itemSummary } = req.body;
+
+  if (reviewerId === sellerId) {
+    return res.status(400).json({ success: false, message: '본인 스스로에게 후기를 남길 수 없습니다.' });
+  }
+
+  if (!rating || !['GREAT', 'GOOD', 'BAD'].includes(rating)) {
+    return res.status(400).json({ success: false, message: '유효한 평가 만족도를 선택해주세요.' });
+  }
+
+  try {
+    const review = db.createReview(sellerId, reviewerId, {
+      rating,
+      tags: tags || [],
+      comment: comment || '',
+      itemSummary
+    });
+    const updatedSeller = db.findUserById(sellerId);
+    return res.status(201).json({
+      success: true,
+      message: '거래 후기 및 매너 평가가 성공적으로 등록되었습니다.',
+      data: {
+        review,
+        sellerMannerScore: updatedSeller?.mannerScore
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message || '후기 작성 중 오류가 발생했습니다.' });
+  }
 });
 
 // GET /items

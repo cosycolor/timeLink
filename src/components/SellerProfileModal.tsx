@@ -1,43 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, ShieldCheck, Watch, Calendar, TrendingUp, AlertCircle } from 'lucide-react';
-import { UserProfile, WatchItem } from '../types.ts';
+import { X, User, ShieldCheck, Watch, ThumbsUp, MessageSquare, Star, Sparkles } from 'lucide-react';
+import { UserProfile, WatchItem, UserReview } from '../types.ts';
 import { api } from '../api.ts';
 
 interface SellerProfileModalProps {
   sellerId: number;
   onClose: () => void;
   onSelectItem: (item: WatchItem) => void;
+  onOpenReview?: (sellerId: number, nickname: string) => void;
+  currentUserId?: number;
 }
 
 export const SellerProfileModal: React.FC<SellerProfileModalProps> = ({
   sellerId,
   onClose,
-  onSelectItem
+  onSelectItem,
+  onOpenReview,
+  currentUserId
 }) => {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<(UserProfile & { reviews?: UserReview[] }) | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'FOR_SALE' | 'SOLD'>('FOR_SALE');
+  const [activeTab, setActiveTab] = useState<'FOR_SALE' | 'SOLD' | 'REVIEWS'>('FOR_SALE');
+
+  const fetchSeller = async () => {
+    setLoading(true);
+    try {
+      const data: any = await api.getSellerProfile(sellerId);
+      setProfile(data);
+    } catch (err) {
+      console.error('Failed to load seller profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSeller = async () => {
-      setLoading(true);
-      try {
-        const data = await api.getSellerProfile(sellerId);
-        setProfile(data);
-      } catch (err) {
-        console.error('Failed to load seller profile:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchSeller();
   }, [sellerId]);
 
   const forSaleItems = (profile?.items || []).filter(i => i.itemStatus === 'FOR_SALE' || i.itemStatus === 'RESERVED');
   const soldItems = (profile?.items || []).filter(i => i.itemStatus === 'SOLD');
+  const reviews = profile?.reviews || [];
+
+  const isSelf = currentUserId === sellerId;
 
   const formatPrice = (price: number) => {
     return `${price.toLocaleString()}원`;
+  };
+
+  const timeAgo = (dateStr: string) => {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours < 1) return '방금 전';
+    if (diffHours < 24) return `${diffHours}시간 전`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}일 전`;
   };
 
   return (
@@ -111,32 +128,45 @@ export const SellerProfileModal: React.FC<SellerProfileModalProps> = ({
                       )}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      누적 거래 완료 {profile.completedSalesCount ?? 0}건 · 회원 ID: #{profile.userId}
+                      누적 거래 완료 {profile.completedSalesCount ?? 0}건 · 받은 후기 {reviews.length}건
                     </div>
                   </div>
                 </div>
 
-                {/* Manner Score */}
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '2px' }}>매너온도</div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#059669' }}>
-                    {profile.mannerScore || 36.5}℃
+                {/* Manner Score & Rate Action */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '2px' }}>매너온도</div>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#059669' }}>
+                      {profile.mannerScore || 36.5}℃
+                    </div>
                   </div>
+
+                  {!isSelf && onOpenReview && (
+                    <button
+                      onClick={() => onOpenReview(profile.userId, profile.nickname)}
+                      className="btn-primary"
+                      style={{ fontSize: '0.78rem', padding: '6px 12px', borderRadius: '8px' }}
+                    >
+                      <ThumbsUp size={13} />
+                      <span>매너 평가</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Items Tabs */}
+              {/* Navigation Tabs */}
               <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '16px', gap: '8px' }}>
                 <button
                   onClick={() => setActiveTab('FOR_SALE')}
                   style={{
-                    padding: '10px 16px',
+                    padding: '10px 14px',
                     background: 'transparent',
                     border: 'none',
                     borderBottom: activeTab === 'FOR_SALE' ? '2px solid #2563eb' : '2px solid transparent',
                     color: activeTab === 'FOR_SALE' ? '#2563eb' : '#64748b',
                     fontWeight: activeTab === 'FOR_SALE' ? 700 : 500,
-                    fontSize: '0.9rem',
+                    fontSize: '0.88rem',
                     cursor: 'pointer'
                   }}
                 >
@@ -145,22 +175,37 @@ export const SellerProfileModal: React.FC<SellerProfileModalProps> = ({
                 <button
                   onClick={() => setActiveTab('SOLD')}
                   style={{
-                    padding: '10px 16px',
+                    padding: '10px 14px',
                     background: 'transparent',
                     border: 'none',
                     borderBottom: activeTab === 'SOLD' ? '2px solid #2563eb' : '2px solid transparent',
                     color: activeTab === 'SOLD' ? '#2563eb' : '#64748b',
                     fontWeight: activeTab === 'SOLD' ? 700 : 500,
-                    fontSize: '0.9rem',
+                    fontSize: '0.88rem',
                     cursor: 'pointer'
                   }}
                 >
                   거래 완료 내역 ({soldItems.length})
                 </button>
+                <button
+                  onClick={() => setActiveTab('REVIEWS')}
+                  style={{
+                    padding: '10px 14px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'REVIEWS' ? '2px solid #2563eb' : '2px solid transparent',
+                    color: activeTab === 'REVIEWS' ? '#2563eb' : '#64748b',
+                    fontWeight: activeTab === 'REVIEWS' ? 700 : 500,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  받은 거래 후기 ({reviews.length})
+                </button>
               </div>
 
-              {/* Item List Rendering */}
-              {activeTab === 'FOR_SALE' ? (
+              {/* Tab 1: For Sale */}
+              {activeTab === 'FOR_SALE' && (
                 forSaleItems.length === 0 ? (
                   <div style={{ padding: '30px 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.88rem' }}>
                     현재 판매 중인 매물이 없습니다.
@@ -214,7 +259,10 @@ export const SellerProfileModal: React.FC<SellerProfileModalProps> = ({
                     ))}
                   </div>
                 )
-              ) : (
+              )}
+
+              {/* Tab 2: Sold Items */}
+              {activeTab === 'SOLD' && (
                 soldItems.length === 0 ? (
                   <div style={{ padding: '30px 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.88rem' }}>
                     완료된 거래 내역이 없습니다.
@@ -254,6 +302,85 @@ export const SellerProfileModal: React.FC<SellerProfileModalProps> = ({
                           <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#64748b' }}>{formatPrice(item.price)}</div>
                           <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700 }}>거래완료</span>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {/* Tab 3: Reviews */}
+              {activeTab === 'REVIEWS' && (
+                reviews.length === 0 ? (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8' }}>
+                    <ThumbsUp size={36} style={{ margin: '0 auto 8px auto', opacity: 0.4 }} />
+                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>아직 등록된 거래 후기가 없습니다.</div>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '4px' }}>첫 번째 거래 후기를 남겨보세요!</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {reviews.map(rev => (
+                      <div
+                        key={rev.reviewId}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '10px',
+                          padding: '14px 16px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
+                              {rev.reviewerNickname}
+                            </span>
+                            <span style={{
+                              background: rev.rating === 'BAD' ? '#fef2f2' : '#ecfdf5',
+                              color: rev.rating === 'BAD' ? '#dc2626' : '#059669',
+                              border: rev.rating === 'BAD' ? '1px solid #fca5a5' : '1px solid #a7f3d0',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: '4px'
+                            }}>
+                              {rev.rating === 'GREAT' ? '😊 최고예요 (+0.5℃)' : rev.rating === 'GOOD' ? '🙂 좋아요 (+0.2℃)' : '🙁 아쉬워요 (-0.5℃)'}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                            {timeAgo(rev.createdAt)}
+                          </span>
+                        </div>
+
+                        {rev.tags && rev.tags.length > 0 && (
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                            {rev.tags.map((tag, tIdx) => (
+                              <span
+                                key={tIdx}
+                                style={{
+                                  background: '#f1f5f9',
+                                  color: '#334155',
+                                  fontSize: '0.72rem',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 500
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {rev.comment && (
+                          <div style={{ fontSize: '0.82rem', color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                            "{rev.comment}"
+                          </div>
+                        )}
+
+                        {rev.itemSummary && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '6px', borderTop: '1px dashed #f1f5f9', paddingTop: '4px' }}>
+                            거래 모델: {rev.itemSummary}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -15,7 +15,8 @@ import {
   Maximize2,
   ChevronLeft,
   ChevronRight,
-  Clock
+  Clock,
+  ThumbsUp
 } from 'lucide-react';
 import { WatchItem, ItemStatus } from '../types.ts';
 
@@ -26,6 +27,7 @@ interface ItemDetailModalProps {
   onDelete: (itemId: number) => Promise<void>;
   onOpenSellerProfile?: (sellerId: number) => void;
   onOpenChat?: (item: WatchItem) => void;
+  onOpenReview?: (sellerId: number, sellerNickname: string, itemSummary?: string) => void;
   currentUserId: number;
 }
 
@@ -36,6 +38,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onDelete,
   onOpenSellerProfile,
   onOpenChat,
+  onOpenReview,
   currentUserId
 }) => {
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
@@ -111,20 +114,20 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     if (item.categoryTier === 'HIGH_END') {
       return (
         <span className="badge-high-end" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-          <Crown size={14} /> 하이엔드
+          <Crown size={14} /> 1,000만원 이상
         </span>
       );
     }
     if (item.categoryTier === 'MID') {
       return (
         <span className="badge-mid" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-          <Watch size={14} /> 미드
+          <Watch size={14} /> 300만~1,000만원
         </span>
       );
     }
     return (
       <span className="badge-entry" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-        엔트리
+        300만원 미만
       </span>
     );
   };
@@ -480,16 +483,28 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   </div>
                 </div>
               ) : (
-                /* Contact / Deal button for buyers */
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                /* Contact / Deal button & Review button for buyers */
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                   <button
                     className="btn-primary"
-                    style={{ flex: 1, justifyContent: 'center', padding: '12px' }}
+                    style={{ flex: 1, justifyContent: 'center', padding: '12px', fontSize: '0.88rem' }}
                     onClick={() => onOpenChat && onOpenChat(item)}
                   >
                     <MessageCircle size={18} />
                     <span>판매자와 1:1 직거래 채팅하기</span>
                   </button>
+
+                  {onOpenReview && (
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '12px 14px', fontSize: '0.82rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      onClick={() => onOpenReview(item.sellerId, item.seller?.nickname || `판매자 (ID: ${item.sellerId})`, `${item.brand} ${item.modelName}`)}
+                      title="이 판매자에게 거래 후기 및 매너온도 남기기"
+                    >
+                      <ThumbsUp size={15} color="#2563eb" />
+                      <span>후기 남기기</span>
+                    </button>
+                  )}
                 </div>
               )}
 

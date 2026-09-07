@@ -14,9 +14,10 @@ interface ChatModalProps {
   currentUserId: number;
   onClose: () => void;
   onBackToList?: () => void;
+  onOpenReview?: (sellerId: number, sellerNickname: string, itemSummary?: string) => void;
 }
 
-export const ChatModal: React.FC<ChatModalProps> = ({ item, currentUserId, onClose, onBackToList }) => {
+export const ChatModal: React.FC<ChatModalProps> = ({ item, currentUserId, onClose, onBackToList, onOpenReview }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -153,12 +154,25 @@ export const ChatModal: React.FC<ChatModalProps> = ({ item, currentUserId, onClo
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {onOpenReview && currentUserId !== item.sellerId && (
+              <button
+                onClick={() => onOpenReview(item.sellerId, item.seller?.nickname || '판매자', `${item.brand} ${item.modelName}`)}
+                className="btn-secondary"
+                style={{ fontSize: '0.75rem', padding: '5px 10px', height: '32px' }}
+                title="판매자 매너온도 평가하기"
+              >
+                후기 남기기
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Watch Item Snippet Bar */}

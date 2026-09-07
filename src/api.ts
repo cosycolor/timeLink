@@ -135,5 +135,29 @@ export const api = {
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || '이미지 업로드에 실패했습니다.');
     return json.urls;
+  },
+
+  // Reviews & Manner Rating
+  async getSellerReviews(userId: number): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/users/${userId}/reviews`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '거래 후기를 불러오지 못했습니다.');
+    return json.data;
+  },
+
+  async createReview(userId: number, payload: {
+    rating: 'GREAT' | 'GOOD' | 'BAD';
+    tags: string[];
+    comment: string;
+    itemSummary?: string;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE}/users/${userId}/reviews`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '거래 후기 등록에 실패했습니다.');
+    return json.data;
   }
 };
