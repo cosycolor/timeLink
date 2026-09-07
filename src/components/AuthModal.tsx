@@ -501,37 +501,55 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onClick={() => fillDemoAccount('seller@timelink.kr', '1234')}
                     style={{
                       flex: 1,
-                      padding: '5px 8px',
+                      padding: '5px 6px',
                       background: '#ffffff',
                       border: '1px solid #cbd5e1',
                       borderRadius: '6px',
-                      fontSize: '0.75rem',
+                      fontSize: '0.74rem',
                       fontWeight: 600,
                       color: '#2563eb',
                       cursor: 'pointer'
                     }}
                   >
-                    판매자 (롤렉스마스터)
+                    판매자
                   </button>
                   <button
                     type="button"
                     onClick={() => fillDemoAccount('buyer@timelink.kr', '1234')}
                     style={{
                       flex: 1,
-                      padding: '5px 8px',
+                      padding: '5px 6px',
                       background: '#ffffff',
                       border: '1px solid #cbd5e1',
                       borderRadius: '6px',
-                      fontSize: '0.75rem',
+                      fontSize: '0.74rem',
                       fontWeight: 600,
                       color: '#059669',
                       cursor: 'pointer'
                     }}
                   >
-                    구매자 (시계러버)
+                    구매자
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fillDemoAccount('admin', 'admin')}
+                    style={{
+                      flex: 1.2,
+                      padding: '5px 6px',
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: '6px',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      color: '#b45309',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    👑 관리자 (admin)
                   </button>
                 </div>
               </div>
+
 
               <button
                 type="submit"

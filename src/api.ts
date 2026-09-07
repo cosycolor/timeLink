@@ -401,5 +401,98 @@ export const api = {
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || '거래 후기 등록에 실패했습니다.');
     return json.data;
+  },
+
+  // ==========================================
+  // Admin API Methods
+  // ==========================================
+  async getAdminStats(): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/stats`, {
+      headers: getHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '관리자 통계를 불러오지 못했습니다.');
+    return json.data;
+  },
+
+  async getAdminReports(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/admin/reports`, {
+      headers: getHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '신고 목록을 불러오지 못했습니다.');
+    return json.data;
+  },
+
+  async updateAdminReport(reportId: number, payload: { status: 'PENDING' | 'RESOLVED'; action?: 'LOCK_ITEM' | 'UNLOCK_ITEM' }): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/reports/${reportId}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '신고 처리에 실패했습니다.');
+    return json.data;
+  },
+
+  async getAdminUsers(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/admin/users`, {
+      headers: getHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '회원 목록을 불러오지 못했습니다.');
+    return json.data;
+  },
+
+  async updateAdminUser(userId: number, payload: { mannerScore?: number; userRole?: 'MEMBER' | 'ADMIN'; nickname?: string }): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '회원 정보 수정에 실패했습니다.');
+    return json.data;
+  },
+
+  async deleteAdminUser(userId: number): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '회원 삭제에 실패했습니다.');
+    return true;
+  },
+
+  async getAdminItems(): Promise<WatchItem[]> {
+    const res = await fetch(`${API_BASE}/admin/items`, {
+      headers: getHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '매물 목록을 불러오지 못했습니다.');
+    return json.data;
+  },
+
+  async updateAdminItemStatus(itemId: number, status: ItemStatus): Promise<WatchItem> {
+    const res = await fetch(`${API_BASE}/admin/items/${itemId}/status`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ status })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '매물 상태 변경에 실패했습니다.');
+    return json.data;
+  },
+
+  async deleteAdminItem(itemId: number): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/admin/items/${itemId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || '매물 삭제에 실패했습니다.');
+    return true;
   }
 };
+

@@ -696,12 +696,12 @@ app.post('/api/v1/items/:itemId/like', (req: Request, res: Response) => {
     return res.status(401).json({ success: false, message: '로그인이 필요한 서비스입니다.' });
   }
 
-  const itemId = parseInt(req.params.itemId as string, 10);
+  const itemId = parseInt(String(req.params.itemId), 10);
   try {
-    const result = db.toggleItemLike(userId, itemId);
+    const result = db.toggleLike(userId, itemId);
     return res.json({
       success: true,
-      message: result.liked ? '관심 매물(위시리스트)에 추가되었습니다.' : '관심 매물에서 제외되었습니다.',
+      message: result.isLiked ? '관심 매물(위시리스트)에 추가되었습니다.' : '관심 매물에서 제외되었습니다.',
       data: result
     });
   } catch (err: any) {
@@ -730,13 +730,13 @@ app.get('/api/v1/users/me/items', (req: Request, res: Response) => {
     return res.status(401).json({ success: false, message: '로그인이 필요합니다.' });
   }
 
-  const status = req.query.status as string | undefined;
-  const items = db.getMyItems(userId, status);
+  const items = db.getItemsBySeller(userId);
   return res.json({
     success: true,
     data: items
   });
 });
+
 
 // POST /reports (허위매물 / 사기 / 비매너 신고 접수)
 app.post('/api/v1/reports', (req: Request, res: Response) => {
@@ -911,6 +911,133 @@ app.post('/api/v1/media/upload', upload.array('files', 10), (req: Request, res: 
     urls
   });
 });
+
+// -------------------------------------------------------------
+// 3.8 ADMIN API ENDPOINTS
+// -------------------------------------------------------------
+
+// Helper to check if requester is Admin
+function checkAdminAuth(req: Request): boolean {
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) return false;
+  const user = db.findUserById(userId);
+  return user?.userRole === 'ADMIN';
+}
+
+// GET /admin/stats (관리자 대시보드 통계)
+app.get('/api/v1/admin/stats', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const stats = db.getAdminStats();
+  return res.json({ success: true, data: stats });
+});
+
+// GET /admin/reports (신고 목록 조회)
+app.get('/api/v1/admin/reports', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const reports = db.getAllReports();
+  return res.json({ success: true, data: reports });
+});
+
+// PATCH /admin/reports/:reportId (신고 처리 및 조치)
+app.patch('/api/v1/admin/reports/:reportId', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const reportId = parseInt(String(req.params.reportId), 10);
+  const { status, action } = req.body; // status: 'PENDING' | 'RESOLVED', action: 'LOCK_ITEM' | 'UNLOCK_ITEM'
+  const updated = db.updateReportStatus(reportId, status, action);
+  if (!updated) {
+    return res.status(404).json({ success: false, message: '신고 내역을 찾을 수 없습니다.' });
+  }
+  return res.json({ success: true, data: updated, message: '신고 처리가 완료되었습니다.' });
+});
+
+// GET /admin/users (전체 회원 목록 조회)
+app.get('/api/v1/admin/users', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const users = db.getAllUsersAdmin().map(u => ({
+    userId: u.userId,
+    email: u.email,
+    nickname: u.nickname,
+    phoneNumber: u.phoneNumber,
+    isPhoneVerified: u.isPhoneVerified,
+    userRole: u.userRole,
+    mannerScore: u.mannerScore,
+    createdAt: u.createdAt
+  }));
+  return res.json({ success: true, data: users });
+});
+
+// PATCH /admin/users/:userId (회원 정보 / 매너온도 / 권한 수정)
+app.patch('/api/v1/admin/users/:userId', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const userId = parseInt(String(req.params.userId), 10);
+  const { mannerScore, userRole, nickname } = req.body;
+  const updated = db.updateUserAdmin(userId, { mannerScore, userRole, nickname });
+  if (!updated) {
+    return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+  }
+  return res.json({ success: true, data: updated, message: '회원 정보가 수정되었습니다.' });
+});
+
+// DELETE /admin/users/:userId (회원 강제 탈퇴)
+app.delete('/api/v1/admin/users/:userId', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const userId = parseInt(String(req.params.userId), 10);
+  const deleted = db.deleteUserAdmin(userId);
+  if (!deleted) {
+    return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+  }
+  return res.json({ success: true, message: '회원이 강제 탈퇴 처리되었습니다.' });
+});
+
+// GET /admin/items (전체 매물 조회)
+app.get('/api/v1/admin/items', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const items = db.getAllItemsAdmin();
+  return res.json({ success: true, data: items });
+});
+
+// PATCH /admin/items/:itemId/status (매물 상태 강제 변경)
+app.patch('/api/v1/admin/items/:itemId/status', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const itemId = parseInt(String(req.params.itemId), 10);
+  const { status } = req.body;
+  const updated = db.updateItemStatusAdmin(itemId, status);
+  if (!updated) {
+    return res.status(404).json({ success: false, message: '매물을 찾을 수 없습니다.' });
+  }
+  return res.json({ success: true, data: updated, message: '매물 상태가 변경되었습니다.' });
+});
+
+// DELETE /admin/items/:itemId (매물 강제 삭제)
+app.delete('/api/v1/admin/items/:itemId', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+  }
+  const itemId = parseInt(String(req.params.itemId), 10);
+  const deleted = db.deleteItemAdmin(itemId);
+  if (!deleted) {
+    return res.status(404).json({ success: false, message: '매물을 찾을 수 없습니다.' });
+  }
+  return res.json({ success: true, message: '매물이 강제 삭제되었습니다.' });
+});
+
+
 
 // Serve frontend in production (dist build)
 const distDir = path.join(process.cwd(), 'dist');

@@ -11,12 +11,60 @@ export interface UserProfile {
   phoneNumber?: string;
   isPhoneVerified: boolean;
   mannerScore: number;
+  userRole?: 'MEMBER' | 'ADMIN';
   remainingDailyQuota?: number;
   recent24hPostsCount?: number;
   completedSalesCount: number;
   joinedAt?: string;
   items?: WatchItem[];
 }
+
+export interface AdminStats {
+  totalUsers: number;
+  totalItems: number;
+  forSaleItems: number;
+  soldItems: number;
+  reportedLockedItems: number;
+  totalReports: number;
+  pendingReports: number;
+  totalReviews: number;
+  totalThreads: number;
+}
+
+export interface AdminReport {
+  reportId: number;
+  reporterId: number;
+  targetItemId?: number;
+  targetSellerId?: number;
+  reason: 'FAKE_SUSPECTED' | 'STOLEN_PHOTO' | 'NO_SHOW' | 'FRAUD_SUSPECTED' | 'OTHER';
+  details?: string;
+  status: 'PENDING' | 'RESOLVED';
+  createdAt: string;
+  targetItem?: WatchItem;
+  targetSeller?: {
+    userId: number;
+    nickname: string;
+    email: string;
+    mannerScore: number;
+  };
+  reporter?: {
+    userId: number;
+    nickname: string;
+    email: string;
+  };
+}
+
+export interface AdminUser {
+  userId: number;
+  email: string;
+  nickname: string;
+  phoneNumber?: string;
+  isPhoneVerified: boolean;
+  userRole: 'MEMBER' | 'ADMIN';
+  mannerScore: number;
+  createdAt: string;
+}
+
 
 export interface SellerProfileDetail extends UserProfile {
   items?: WatchItem[];

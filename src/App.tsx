@@ -17,7 +17,9 @@ import { ReportModal } from './components/ReportModal.tsx';
 import { ReviewModal } from './components/ReviewModal.tsx';
 import { AuthModal } from './components/AuthModal.tsx';
 import { TermsModal, TermsTab } from './components/TermsModal.tsx';
+import { AdminModal } from './components/AdminModal.tsx';
 import { CategoryTier, ItemStatus, UserProfile, WatchItem } from './types.ts';
+
 import { api, getAuthToken, setAuthUserId } from './api.ts';
 import { Shield, Sparkles, TrendingUp, AlertCircle, CheckCircle, Check, ArrowRight, MessageSquare, Heart } from 'lucide-react';
 
@@ -60,10 +62,12 @@ export const App: React.FC = () => {
   const [isMyListingsOpen, setIsMyListingsOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState<boolean>(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<WatchItem | null>(null);
   const [reportTarget, setReportTarget] = useState<{ targetItemId?: number; targetSellerId?: number; itemSummary?: string; sellerNickname?: string } | null>(null);
   const [reviewTarget, setReviewTarget] = useState<{ sellerId: number; nickname: string; itemSummary?: string } | null>(null);
   const [detailBackAction, setDetailBackAction] = useState<{ label: string; action: () => void } | null>(null);
+
 
   // Chat Threads state
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
@@ -300,7 +304,9 @@ export const App: React.FC = () => {
         onOpenChatList={() => {
           requireAuth(() => setIsChatListOpen(true), '채팅 목록 조회를 위해 로그인이 필요합니다.');
         }}
+        onOpenAdmin={() => setIsAdminModalOpen(true)}
         unreadChatCount={chatThreads.reduce((acc, t) => acc + t.unreadCount, 0)}
+
         wishlistOnly={wishlistOnly}
         onToggleWishlistOnly={() => {
           requireAuth(() => setWishlistOnly(prev => !prev), '관심 매물 조회를 위해 로그인이 필요합니다.');
@@ -779,6 +785,14 @@ export const App: React.FC = () => {
           onClose={() => setIsTermsModalOpen(false)}
         />
       )}
+
+      {/* Admin Dashboard Modal */}
+      <AdminModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        onRefreshItems={loadItems}
+      />
+
 
       {/* Footer */}
       <footer style={{

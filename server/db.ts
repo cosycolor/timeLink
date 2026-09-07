@@ -82,8 +82,21 @@ const INITIAL_USERS: User[] = [
     mannerScore: 36.5,
     createdAt: '2024-05-01T09:00:00.000Z',
     updatedAt: '2024-05-01T09:00:00.000Z'
+  },
+  {
+    userId: 999,
+    email: 'admin@timelink.kr',
+    passwordHash: bcrypt.hashSync('admin', 10),
+    nickname: '타임링크 관리자',
+    phoneNumber: '010-0000-0000',
+    isPhoneVerified: true,
+    userRole: 'ADMIN',
+    mannerScore: 99.9,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
   }
 ];
+
 
 const INITIAL_ITEMS: WatchItem[] = [
   {
@@ -451,6 +464,27 @@ class PersistentDatabase {
         this.nextUserId = Math.max(this.nextUserId, maxUserId + 1);
       }
 
+      // Ensure Admin User exists
+      const hasAdmin = this.users.some(u => u.userRole === 'ADMIN' || u.email.toLowerCase() === 'admin@timelink.kr');
+      if (!hasAdmin) {
+        const adminUser: User = {
+          userId: 999,
+          email: 'admin@timelink.kr',
+          passwordHash: bcrypt.hashSync('admin', 10),
+          nickname: '타임링크 관리자',
+          phoneNumber: '010-0000-0000',
+          isPhoneVerified: true,
+          userRole: 'ADMIN',
+          mannerScore: 99.9,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        this.users.unshift(adminUser);
+        supabase.from('users').upsert(mapUserToDb(adminUser)).then(({ error }) => {
+          if (error) console.error('[SUPABASE ERROR] Failed to upsert admin user:', error);
+        });
+      }
+
       // B. Items & Images
       const { data: dbItems, error: iErr } = await supabase.from('watch_items').select('*');
       const { data: dbImages, error: imgErr } = await supabase.from('item_images').select('*');
@@ -561,8 +595,12 @@ class PersistentDatabase {
     return this.users.find(u => u.userId === userId);
   }
 
-  public findUserByEmail(email: string): User | undefined {
-    return this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  public findUserByEmail(identifier: string): User | undefined {
+    const clean = identifier.trim().toLowerCase();
+    if (clean === 'admin' || clean === 'admin@timelink.kr') {
+      return this.users.find(u => u.userRole === 'ADMIN' || u.email.toLowerCase() === 'admin@timelink.kr' || u.email.toLowerCase() === 'admin');
+    }
+    return this.users.find(u => u.email.toLowerCase() === clean);
   }
 
   public createUser(email: string, nickname: string, plainPassword: string): User {
@@ -887,12 +925,13 @@ class PersistentDatabase {
           console.error('[SUPABASE ERROR] Failed to insert item:', error);
           return;
         }
-        if (images.length > 0) {
+        if (supabase && images.length > 0) {
           const { error: imgErr } = await supabase.from('item_images').insert(images.map(mapImageToDb));
           if (imgErr) console.error('[SUPABASE ERROR] Failed to insert item images:', imgErr);
         }
       });
     }
+
 
     return this.enrichItemWithSeller(newItem);
   }
@@ -968,10 +1007,11 @@ class PersistentDatabase {
     if (supabase) {
       supabase.from('watch_items').update(mapItemToDb(item)).eq('item_id', itemId).then(async ({ error }) => {
         if (error) console.error('[SUPABASE ERROR] Failed to update item:', error);
-        if (dto.images && item.images.length > 0) {
+        if (supabase && dto.images && item.images.length > 0) {
           await supabase.from('item_images').delete().eq('item_id', itemId);
           await supabase.from('item_images').insert(item.images.map(mapImageToDb));
         }
+
       });
     }
 
@@ -1467,6 +1507,160 @@ class PersistentDatabase {
       } : undefined
     };
   }
+
+  // ==========================================
+  // Admin Operations
+  // ==========================================
+  public getAdminStats() {
+    const totalUsers = this.users.length;
+    const totalItems = this.items.length;
+    const forSaleItems = this.items.filter(i => i.itemStatus === 'FOR_SALE').length;
+    const soldItems = this.items.filter(i => i.itemStatus === 'SOLD').length;
+    const reportedLockedItems = this.items.filter(i => i.itemStatus === 'REPORTED_LOCKED').length;
+    const totalReports = this.reports.length;
+    const pendingReports = this.reports.filter(r => r.status === 'PENDING').length;
+    const totalReviews = this.reviews.length;
+    const totalThreads = this.threads.length;
+
+    return {
+      totalUsers,
+      totalItems,
+      forSaleItems,
+      soldItems,
+      reportedLockedItems,
+      totalReports,
+      pendingReports,
+      totalReviews,
+      totalThreads
+    };
+  }
+
+  public getAllReports(): (UserReport & { targetItem?: WatchItem; targetSeller?: User; reporter?: User })[] {
+    return this.reports.map(r => {
+      const reporter = this.findUserById(r.reporterId);
+      let targetItem: WatchItem | undefined;
+      let targetSeller: User | undefined;
+
+      if (r.targetItemId) {
+        targetItem = this.items.find(i => i.itemId === r.targetItemId);
+        if (targetItem) {
+          targetSeller = this.findUserById(targetItem.sellerId);
+        }
+      }
+      if (r.targetSellerId && !targetSeller) {
+        targetSeller = this.findUserById(r.targetSellerId);
+      }
+
+      return {
+        ...r,
+        targetItem,
+        targetSeller,
+        reporter
+      };
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public updateReportStatus(reportId: number, status: 'PENDING' | 'RESOLVED', action?: 'LOCK_ITEM' | 'UNLOCK_ITEM'): UserReport | undefined {
+    const report = this.reports.find(r => r.reportId === reportId);
+    if (!report) return undefined;
+    report.status = status;
+
+    if (action === 'LOCK_ITEM' && report.targetItemId) {
+      const item = this.items.find(i => i.itemId === report.targetItemId);
+      if (item && item.itemStatus !== 'SOLD') {
+        item.itemStatus = 'REPORTED_LOCKED';
+        item.updatedAt = new Date().toISOString();
+        if (supabase) {
+          supabase.from('watch_items').update({ item_status: 'REPORTED_LOCKED', updated_at: item.updatedAt }).eq('item_id', item.itemId).then();
+        }
+      }
+    } else if (action === 'UNLOCK_ITEM' && report.targetItemId) {
+      const item = this.items.find(i => i.itemId === report.targetItemId);
+      if (item && item.itemStatus === 'REPORTED_LOCKED') {
+        item.itemStatus = 'FOR_SALE';
+        item.updatedAt = new Date().toISOString();
+        if (supabase) {
+          supabase.from('watch_items').update({ item_status: 'FOR_SALE', updated_at: item.updatedAt }).eq('item_id', item.itemId).then();
+        }
+      }
+    }
+
+    this.saveLocal();
+    if (supabase) {
+      supabase.from('user_reports').update({ status }).eq('report_id', reportId).then();
+    }
+    return report;
+  }
+
+  public getAllUsersAdmin(): User[] {
+    return [...this.users].sort((a, b) => b.userId - a.userId);
+  }
+
+  public updateUserAdmin(userId: number, data: { mannerScore?: number; userRole?: 'MEMBER' | 'ADMIN'; nickname?: string }): User | undefined {
+    const user = this.findUserById(userId);
+    if (!user) return undefined;
+
+    if (data.mannerScore !== undefined) {
+      user.mannerScore = Math.min(99.9, Math.max(0, Number(data.mannerScore)));
+    }
+    if (data.userRole) {
+      user.userRole = data.userRole;
+    }
+    if (data.nickname && data.nickname.trim()) {
+      user.nickname = data.nickname.trim();
+    }
+    user.updatedAt = new Date().toISOString();
+    this.saveLocal();
+
+    if (supabase) {
+      supabase.from('users').update({
+        manner_score: user.mannerScore,
+        user_role: user.userRole,
+        nickname: user.nickname,
+        updated_at: user.updatedAt
+      }).eq('user_id', userId).then();
+    }
+    return user;
+  }
+
+  public deleteUserAdmin(userId: number): boolean {
+    const idx = this.users.findIndex(u => u.userId === userId);
+    if (idx === -1) return false;
+    this.users.splice(idx, 1);
+    this.saveLocal();
+    if (supabase) {
+      supabase.from('users').delete().eq('user_id', userId).then();
+    }
+    return true;
+  }
+
+  public getAllItemsAdmin(): WatchItem[] {
+    return this.items.map(item => this.enrichItemWithSeller(item)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public updateItemStatusAdmin(itemId: number, status: ItemStatus): WatchItem | undefined {
+    const item = this.items.find(i => i.itemId === itemId);
+    if (!item) return undefined;
+    item.itemStatus = status;
+    item.updatedAt = new Date().toISOString();
+    this.saveLocal();
+    if (supabase) {
+      supabase.from('watch_items').update({ item_status: status, updated_at: item.updatedAt }).eq('item_id', itemId).then();
+    }
+    return this.enrichItemWithSeller(item);
+  }
+
+  public deleteItemAdmin(itemId: number): boolean {
+    const idx = this.items.findIndex(i => i.itemId === itemId);
+    if (idx === -1) return false;
+    this.items.splice(idx, 1);
+    this.saveLocal();
+    if (supabase) {
+      supabase.from('watch_items').delete().eq('item_id', itemId).then();
+    }
+    return true;
+  }
 }
 
 export const db = new PersistentDatabase();
+

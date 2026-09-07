@@ -1,5 +1,5 @@
 import React from 'react';
-import { Watch, PlusCircle, ShieldCheck, AlertCircle, Flame, MessageSquare, LogIn, LogOut, User, Package, Heart } from 'lucide-react';
+import { Watch, PlusCircle, ShieldCheck, AlertCircle, Flame, MessageSquare, LogIn, LogOut, User, Package, Heart, Shield } from 'lucide-react';
 import { UserProfile } from '../types.ts';
 
 interface HeaderProps {
@@ -9,6 +9,7 @@ interface HeaderProps {
   onOpenMyProfile: () => void;
   onOpenMyListings: () => void;
   onOpenChatList: () => void;
+  onOpenAdmin?: () => void;
   unreadChatCount: number;
   wishlistOnly: boolean;
   onToggleWishlistOnly: () => void;
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMyProfile,
   onOpenMyListings,
   onOpenChatList,
+  onOpenAdmin,
   unreadChatCount,
   wishlistOnly,
   onToggleWishlistOnly,
@@ -35,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSwitchUser,
   currentUserId
 }) => {
+
   return (
     <header className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 40, borderBottom: '1px solid #e2e8f0', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
       <div style={{
@@ -130,7 +133,33 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
 
+              {/* Admin Dashboard Button */}
+              {userProfile.userRole === 'ADMIN' && (
+                <button
+                  onClick={onOpenAdmin}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    backgroundColor: '#d97706',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
+                  }}
+                  title="관리자 센터 열기"
+                >
+                  <Shield size={14} />
+                  <span>관리자 센터</span>
+                </button>
+              )}
+
               {/* Phone Verification Status */}
+
               {userProfile.isPhoneVerified ? (
                 <div style={{
                   display: 'flex',
