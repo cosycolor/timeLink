@@ -207,7 +207,7 @@ export const ItemCreateModal: React.FC<ItemCreateModalProps> = ({
 
     // 2. 24h Quota check
     if ((userProfile.remainingDailyQuota ?? 3) <= 0) {
-      setError('24시간 내 최대 3건 등록 쿼터를 모두 소진하였습니다 (도배 방지 정책).');
+      setError('24시간 내 최대 3건 등록 가능 횟수를 모두 소진하였습니다 (도배 방지 정책).');
       return;
     }
 

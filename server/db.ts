@@ -75,6 +75,24 @@ class Database {
           isVerificationPhoto: false,
           sortOrder: 1,
           createdAt: new Date().toISOString()
+        },
+        {
+          imageId: 2,
+          itemId: 101,
+          imageUrl: '/images/watches/rolex_submariner_dial.jpg',
+          isRepresentative: false,
+          isVerificationPhoto: false,
+          sortOrder: 2,
+          createdAt: new Date().toISOString()
+        },
+        {
+          imageId: 3,
+          itemId: 101,
+          imageUrl: '/images/watches/rolex_submariner_clasp.jpg',
+          isRepresentative: false,
+          isVerificationPhoto: false,
+          sortOrder: 3,
+          createdAt: new Date().toISOString()
         }
       ]
     },
@@ -146,6 +164,15 @@ class Database {
           isRepresentative: true,
           isVerificationPhoto: false,
           sortOrder: 1,
+          createdAt: new Date().toISOString()
+        },
+        {
+          imageId: 7,
+          itemId: 103,
+          imageUrl: '/images/watches/omega_moonwatch_caseback.jpg',
+          isRepresentative: false,
+          isVerificationPhoto: false,
+          sortOrder: 2,
           createdAt: new Date().toISOString()
         }
       ]

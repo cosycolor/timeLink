@@ -314,7 +314,7 @@ export const App: React.FC = () => {
               borderRadius: '10px',
               padding: '12px 14px'
             }}>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: '2px' }}>일일 등록 쿼터</div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: '2px' }}>일일 등록 제한</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>최대 3건</div>
             </div>
 

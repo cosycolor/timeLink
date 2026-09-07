@@ -211,7 +211,7 @@ export const MyProfileModal: React.FC<MyProfileModalProps> = ({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Flame size={15} color="#d97706" />
-              <span>오늘 등록 쿼터:</span>
+              <span>오늘 등록 가능 횟수:</span>
             </div>
             <strong style={{ color: (userProfile?.remainingDailyQuota ?? 3) > 0 ? '#059669' : '#dc2626' }}>
               {userProfile?.remainingDailyQuota ?? 3}/3건 남음

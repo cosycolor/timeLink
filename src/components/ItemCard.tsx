@@ -200,9 +200,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
         {/* Model Name */}
         <h3 style={{
           fontSize: '0.98rem',
-          fontWeight: 600,
+          fontWeight: 700,
           color: '#0f172a',
-          marginBottom: '8px',
+          marginBottom: '6px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap'
@@ -210,22 +210,37 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
           {item.modelName}
         </h3>
 
-        {/* Specifications snippet */}
+        {/* Location & Updated Time (Moved to Top for instant visibility) */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
           fontSize: '0.75rem',
+          color: '#475569',
+          marginBottom: '8px'
+        }}>
+          <MapPin size={13} color="#2563eb" style={{ flexShrink: 0 }} />
+          <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.preferredLocation || '직거래 장소 협의'}
+          </span>
+          <span style={{ color: '#cbd5e1' }}>·</span>
+          <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{timeAgo(item.updatedAt || item.createdAt)}</span>
+        </div>
+
+        {/* Specifications snippet (Case size, Movement, Dial color) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          fontSize: '0.74rem',
           color: '#64748b',
-          marginBottom: '12px'
+          marginBottom: '10px'
         }}>
           {item.caseSizeMm && <span>{item.caseSizeMm}mm</span>}
           {item.caseSizeMm && <span>·</span>}
           <span>{item.movementType === 'AUTOMATIC' ? '오토매틱' : item.movementType === 'MANUAL' ? '수동' : '쿼츠'}</span>
           {item.dialColor && <span>·</span>}
           {item.dialColor && <span>{item.dialColor}</span>}
-          {item.stampingDate && <span>·</span>}
-          {item.stampingDate && <span>{item.stampingDate}</span>}
         </div>
 
         {/* Accessories tags */}
@@ -262,7 +277,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
           </span>
         </div>
 
-        {/* Footer: Price & Location */}
+        {/* Footer: Price & Trade Method */}
         <div style={{
           marginTop: 'auto',
           paddingTop: '12px',
@@ -272,8 +287,8 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
           justifyContent: 'space-between'
         }}>
           <div>
-            <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>
-              {item.tradeType === 'DIRECT_ONLY' ? '대면 직거래' : '직거래 / 택배'}
+            <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', fontWeight: 600 }}>
+              {item.tradeType === 'DIRECT_ONLY' ? '대면 직거래 원칙' : '직거래 / 택배'}
             </span>
             <div style={{
               fontSize: '1.15rem',
@@ -286,18 +301,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
           </div>
 
           <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', color: '#64748b', justifyContent: 'flex-end' }}>
-              <MapPin size={12} />
-              <span style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.preferredLocation || '지역 협의'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px', justifyContent: 'flex-end' }}>
-              <span>{timeAgo(item.createdAt)}</span>
-              <span>·</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <Eye size={10} /> {item.viewCount}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', color: '#94a3b8', justifyContent: 'flex-end' }}>
+              <Eye size={12} />
+              <span>조회 {item.viewCount}</span>
             </div>
           </div>
         </div>

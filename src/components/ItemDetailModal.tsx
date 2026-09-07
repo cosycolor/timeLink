@@ -11,7 +11,11 @@ import {
   AlertTriangle,
   User,
   Trash2,
-  MessageCircle
+  MessageCircle,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
+  Clock
 } from 'lucide-react';
 import { WatchItem, ItemStatus } from '../types.ts';
 
@@ -35,6 +39,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   currentUserId
 }) => {
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -46,7 +51,26 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     return `${price.toLocaleString()}원`;
   };
 
+  const timeAgo = (dateStr: string) => {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours < 1) return '방금 전';
+    if (diffHours < 24) return `${diffHours}시간 전`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}일 전`;
+  };
+
   const currentImage = item.images[selectedImgIndex] || item.images[0];
+
+  const handlePrevImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedImgIndex(prev => (prev === 0 ? item.images.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedImgIndex(prev => (prev === item.images.length - 1 ? 0 : prev + 1));
+  };
 
   const handleStatusUpdate = async (status: ItemStatus) => {
     setActionError(null);
@@ -106,170 +130,226 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-content"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '880px', padding: '0', overflow: 'hidden' }}
-      >
-        {/* Header Bar */}
-        <div style={{
-          padding: '16px 24px',
-          borderBottom: '1px solid #e2e8f0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: '#f8fafc'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {renderTierBadge()}
-
-            {item.itemStatus === 'SOLD' && (
-              <span style={{
-                background: '#fee2e2',
-                color: '#dc2626',
-                border: '1px solid #fca5a5',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                padding: '3px 8px',
-                borderRadius: '6px'
-              }}>
-                거래 완료 (시세 참고용)
-              </span>
-            )}
-            {item.itemStatus === 'RESERVED' && (
-              <span style={{
-                background: '#fef3c7',
-                color: '#b45309',
-                border: '1px solid #fde68a',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                padding: '3px 8px',
-                borderRadius: '6px'
-              }}>
-                예약중
-              </span>
-            )}
-          </div>
-
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#64748b',
-              cursor: 'pointer',
-              padding: '4px'
-            }}
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Error Notification */}
-        {actionError && (
+    <>
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          className="modal-content"
+          onClick={(e) => e.stopPropagation()}
+          style={{ maxWidth: '880px', padding: '0', overflow: 'hidden' }}
+        >
+          {/* Header Bar */}
           <div style={{
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            color: '#b91c1c',
-            padding: '12px 20px',
-            fontSize: '0.85rem',
+            padding: '16px 24px',
+            borderBottom: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            justifyContent: 'space-between',
+            backgroundColor: '#f8fafc'
           }}>
-            <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0 }} />
-            <span>{actionError}</span>
-          </div>
-        )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {renderTierBadge()}
 
-        <div style={{ padding: '24px', maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
-          
-          {/* Main Grid: Gallery & Summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '28px' }}>
+              {item.itemStatus === 'SOLD' && (
+                <span style={{
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  border: '1px solid #fca5a5',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  padding: '3px 8px',
+                  borderRadius: '6px'
+                }}>
+                  거래 완료 (시세 참고용)
+                </span>
+              )}
+              {item.itemStatus === 'RESERVED' && (
+                <span style={{
+                  background: '#fef3c7',
+                  color: '#b45309',
+                  border: '1px solid #fde68a',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  padding: '3px 8px',
+                  borderRadius: '6px'
+                }}>
+                  예약중
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#64748b',
+                cursor: 'pointer',
+                padding: '4px'
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Error Notification */}
+          {actionError && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#b91c1c',
+              padding: '12px 20px',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0 }} />
+              <span>{actionError}</span>
+            </div>
+          )}
+
+          <div style={{ padding: '24px', maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
             
-            {/* Gallery Column */}
-            <div>
-              {/* Main Preview */}
-              <div style={{
-                position: 'relative',
-                width: '100%',
-                paddingTop: '80%',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                backgroundColor: '#f1f5f9',
-                border: '1px solid #e2e8f0',
-                marginBottom: '12px'
-              }}>
-                {currentImage && !imgError ? (
-                  <img
-                    src={currentImage.imageUrl}
-                    alt="Watch main preview"
-                    onError={() => setImgError(true)}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain'
-                    }}
-                  />
-                ) : (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: '8px' }}>
-                    <Watch size={40} color="#94a3b8" />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{item.brand} {item.modelName}</span>
+            {/* Main Grid: Gallery & Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '28px' }}>
+              
+              {/* Gallery Column */}
+              <div>
+                {/* Main Preview with Zoom trigger */}
+                <div
+                  onClick={() => setIsZoomOpen(true)}
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    paddingTop: '80%',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    backgroundColor: '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    marginBottom: '12px',
+                    cursor: 'zoom-in'
+                  }}
+                  title="클릭하여 고화질 사진 확대 보기"
+                >
+                  {currentImage && !imgError ? (
+                    <img
+                      src={currentImage.imageUrl}
+                      alt="Watch main preview"
+                      onError={() => setImgError(true)}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    />
+                  ) : (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: '8px' }}>
+                      <Watch size={40} color="#94a3b8" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{item.brand} {item.modelName}</span>
+                    </div>
+                  )}
+
+                  {/* Zoom badge overlay */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    right: '10px',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    color: '#ffffff',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    backdropFilter: 'blur(4px)'
+                  }}>
+                    <Maximize2 size={12} />
+                    <span>사진 확대 ({selectedImgIndex + 1}/{item.images.length})</span>
+                  </div>
+                </div>
+
+                {/* Thumbnail strip */}
+                {item.images.length > 1 && (
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {item.images.map((img, idx) => (
+                      <div
+                        key={img.imageId || idx}
+                        onClick={() => setSelectedImgIndex(idx)}
+                        style={{
+                          position: 'relative',
+                          width: '64px',
+                          height: '64px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          border: selectedImgIndex === idx ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                          opacity: selectedImgIndex === idx ? 1 : 0.6,
+                          flexShrink: 0
+                        }}
+                      >
+                        <img
+                          src={img.imageUrl}
+                          alt="Thumbnail"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* Thumbnail strip */}
-              {item.images.length > 1 && (
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                  {item.images.map((img, idx) => (
-                    <div
-                      key={img.imageId || idx}
-                      onClick={() => setSelectedImgIndex(idx)}
-                      style={{
-                        position: 'relative',
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        cursor: 'pointer',
-                        border: selectedImgIndex === idx ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                        opacity: selectedImgIndex === idx ? 1 : 0.6,
-                        flexShrink: 0
-                      }}
-                    >
-                      <img
-                        src={img.imageUrl}
-                        alt="Thumbnail"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    </div>
-                  ))}
+              {/* Info Column */}
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#2563eb', marginBottom: '4px' }}>
+                  {item.brand}
                 </div>
-              )}
-            </div>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px', lineHeight: '1.3' }}>
+                  {item.modelName}
+                </h1>
 
-            {/* Info Column */}
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#2563eb', marginBottom: '4px' }}>
-                {item.brand}
-              </div>
-              <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px', lineHeight: '1.3' }}>
-                {item.modelName}
-              </h1>
+                <div style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  fontFamily: 'var(--font-sans)',
+                  marginBottom: '12px'
+                }}>
+                  {formatPrice(item.price)}
+                </div>
 
-              <div style={{
-                fontSize: '1.75rem',
-                fontWeight: 800,
-                color: '#0f172a',
-                fontFamily: 'var(--font-sans)',
-                marginBottom: '16px'
-              }}>
-                {formatPrice(item.price)}
-              </div>
+                {/* Location & Updated Time Bar (Prominently placed at top) */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                  fontSize: '0.82rem',
+                  color: '#334155',
+                  marginBottom: '16px',
+                  padding: '9px 12px',
+                  backgroundColor: '#f1f5f9',
+                  borderRadius: '8px'
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, color: '#1e3a8a' }}>
+                    <MapPin size={15} color="#2563eb" />
+                    <span>{item.preferredLocation || '직거래 장소 협의'}</span>
+                  </span>
+                  <span style={{ color: '#cbd5e1' }}>·</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#64748b' }}>
+                    <Clock size={14} />
+                    <span>등록 {timeAgo(item.updatedAt || item.createdAt)}</span>
+                  </span>
+                  <span style={{ color: '#cbd5e1' }}>·</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#64748b' }}>
+                    <Eye size={14} />
+                    <span>조회 {item.viewCount}</span>
+                  </span>
+                </div>
 
               {/* Seller Profile Box */}
               <div
@@ -471,7 +551,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     <td style={{ padding: '10px 14px', color: '#0f172a' }}>{item.dialColor || '미기재'}</td>
                   </tr>
                   <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <th style={{ padding: '10px 14px', background: '#f8fafc', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>스탬핑 일자</th>
+                    <th style={{ padding: '10px 14px', background: '#f8fafc', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>구매 시기 (스탬핑 일자)</th>
                     <td style={{ padding: '10px 14px', color: '#0f172a' }}>{item.stampingDate || '미상'}</td>
                     <th style={{ padding: '10px 14px', background: '#f8fafc', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>출처</th>
                     <td style={{ padding: '10px 14px', color: '#0f172a' }}>{originLabel(item.originType)}</td>
@@ -540,5 +620,200 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
       </div>
     </div>
+
+      {/* Fullscreen Photo Zoom / Lightbox Modal */}
+      {isZoomOpen && (
+        <div
+          className="lightbox-overlay"
+          onClick={() => setIsZoomOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '20px',
+            userSelect: 'none',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {/* Lightbox Top Bar */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '1200px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              color: '#ffffff',
+              padding: '8px 16px',
+              zIndex: 10
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontWeight: 700, fontSize: '1rem', color: '#f8fafc' }}>
+                {item.brand} {item.modelName}
+              </span>
+              <span style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '3px 8px',
+                borderRadius: '12px',
+                fontSize: '0.75rem',
+                fontWeight: 600
+              }}>
+                {selectedImgIndex + 1} / {item.images.length}
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsZoomOpen(false)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.15)',
+                border: 'none',
+                color: '#ffffff',
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)')}
+              title="닫기 (ESC 또는 바깥 클릭)"
+            >
+              <X size={22} />
+            </button>
+          </div>
+
+          {/* Main Zoomed Image with Nav Arrows */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              flex: 1,
+              maxHeight: 'calc(100vh - 170px)'
+            }}
+          >
+            {item.images.length > 1 && (
+              <button
+                onClick={handlePrevImage}
+                style={{
+                  position: 'absolute',
+                  left: '20px',
+                  background: 'rgba(0, 0, 0, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  zIndex: 10,
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.8)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)')}
+                title="이전 사진"
+              >
+                <ChevronLeft size={28} />
+              </button>
+            )}
+
+            <img
+              src={currentImage?.imageUrl}
+              alt="High resolution watch preview"
+              style={{
+                maxHeight: '100%',
+                maxWidth: '90vw',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.8)'
+              }}
+            />
+
+            {item.images.length > 1 && (
+              <button
+                onClick={handleNextImage}
+                style={{
+                  position: 'absolute',
+                  right: '20px',
+                  background: 'rgba(0, 0, 0, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  zIndex: 10,
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37, 99, 235, 0.8)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)')}
+                title="다음 사진"
+              >
+                <ChevronRight size={28} />
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Thumbnails */}
+          {item.images.length > 1 && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: 'flex',
+                gap: '10px',
+                padding: '10px',
+                background: 'rgba(15, 23, 42, 0.7)',
+                borderRadius: '12px',
+                backdropFilter: 'blur(8px)',
+                maxWidth: '90vw',
+                overflowX: 'auto'
+              }}
+            >
+              {item.images.map((img, idx) => (
+                <div
+                  key={img.imageId || idx}
+                  onClick={() => setSelectedImgIndex(idx)}
+                  style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    border: selectedImgIndex === idx ? '2px solid #3b82f6' : '2px solid transparent',
+                    opacity: selectedImgIndex === idx ? 1 : 0.5,
+                    transform: selectedImgIndex === idx ? 'scale(1.05)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <img
+                    src={img.imageUrl}
+                    alt="Thumbnail"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 };

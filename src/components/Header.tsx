@@ -151,7 +151,7 @@ export const Header: React.FC<HeaderProps> = ({
                 gap: '5px'
               }}>
                 <Flame size={13} color="#f59e0b" />
-                <span>오늘 쿼터: <strong style={{ color: (userProfile.remainingDailyQuota ?? 0) > 0 ? '#10b981' : '#ef4444' }}>
+                <span>오늘 등록 가능: <strong style={{ color: (userProfile.remainingDailyQuota ?? 0) > 0 ? '#10b981' : '#ef4444' }}>
                   {userProfile.remainingDailyQuota ?? 0}/3건
                 </strong></span>
               </div>
@@ -193,13 +193,35 @@ export const Header: React.FC<HeaderProps> = ({
             <span>내 정보 수정</span>
           </button>
 
-          {/* Create Item Button */}
+          {/* Create Item Button (Prominent & High-Impact) */}
           <button
             onClick={onOpenCreate}
-            className="btn-primary"
-            style={{ fontSize: '0.88rem', padding: '8px 16px' }}
+            style={{
+              background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '9px 18px',
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+              transition: 'all 0.2s ease',
+              letterSpacing: '-0.01em'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(37, 99, 235, 0.45)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 14px rgba(37, 99, 235, 0.35)';
+            }}
           >
-            <PlusCircle size={16} />
+            <PlusCircle size={17} strokeWidth={2.5} />
             <span>매물 등록하기</span>
           </button>
 
