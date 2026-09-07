@@ -387,6 +387,15 @@ app.post('/api/v1/media/upload', upload.array('files', 10), (req: Request, res: 
   });
 });
 
+// Serve frontend in production (dist build)
+const distDir = path.join(process.cwd(), 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+}
+
 app.listen(PORT, () => {
   console.log(`[TIMELINK REST API Server] Running on http://localhost:${PORT}/api/v1`);
 });
